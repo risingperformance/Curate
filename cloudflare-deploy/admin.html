@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src  'self' https://cdn.jsdelivr.net;
+  style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src    https://fonts.gstatic.com;
+  img-src     'self' https://mlwzpgtdgfaczgxipbsq.supabase.co data:;
+  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  object-src  'none';
+  base-uri    'self';
+  form-action 'self';
+">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>FootJoy — Admin Portal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js" integrity="sha384-Y1tzkgTMv0NgNIkhIaJiI9rqNrOLfosToPr6Bzp4XVIOvF1BUd7mNlUVPpo6G8lL" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" integrity="sha384-D/t0ZMqQW31H3az8ktEiNb39wyKnS82iFY52QPACM+IjKW3jDUhyIgh2PApRqJZs" crossorigin="anonymous"></script>
+<script src="supabase-init.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --navy: #0a1628;
+    --blue: #1a3a6b;
+    --gold: #c9a84c;
+    --mid: #6b7a99;
+    --border: #dde4f0;
+    --bg: #f4f6fb;
+    --white: #fff;
+    --green: #2d7d46;
+    --green-bg: #e8f5ec;
+    --red: #c62828;
+    --red-bg: #fbeaea;
+    --amber: #b35500;
+    --amber-bg: #fff4e0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--navy); min-height: 100vh; }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    position: fixed; inset: 0; background: var(--navy); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.5s;
+  }
+  #login-screen.unlocked { opacity: 0; pointer-events: none; }
+  .login-card { text-align: center; width: 340px; }
+  .login-logo { width: 180px; height: auto; margin-bottom: 20px; }
+  .login-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 24px;
+    font-weight: 700; color: #fff; margin-bottom: 32px; line-height: 1.25;
+  }
+  .login-prompt { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 20px; letter-spacing: 1px; }
+  .login-field {
+    width: 100%; padding: 12px 16px; margin-bottom: 12px;
+    background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 8px; color: #fff; font-family: 'Barlow', sans-serif; font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  .login-field::placeholder { color: rgba(255,255,255,0.35); }
+  .login-field:focus { outline: none; border-color: var(--gold); background: rgba(201,168,76,0.06); }
+  .login-btn {
+    width: 100%; padding: 12px; margin-top: 8px;
+    background: var(--gold); color: var(--navy); border: none; border-radius: 8px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: opacity 0.15s;
+  }
+  .login-btn:hover { opacity: 0.9; }
+  .login-error { font-size: 12px; color: #f08080; min-height: 18px; margin-top: 10px; transition: opacity 0.3s; }
+  .login-forgot {
+    display: inline-block; margin-top: 12px; font-size: 12px;
+    color: rgba(255,255,255,0.4); text-decoration: none; cursor: pointer;
+  }
+  .login-forgot:hover { color: rgba(255,255,255,0.7); }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--navy); padding: 0 28px; height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-brand {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    font-weight: 600; letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+    font-weight: 700; color: #fff; letter-spacing: 0.5px;
+  }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .btn-refresh {
+    padding: 7px 16px; background: rgba(255,255,255,0.1); color: #fff;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+    font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-refresh:hover { background: rgba(255,255,255,0.18); }
+  .last-updated { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* ── TABS ── */
+  .tab-bar {
+    background: var(--white); border-bottom: 2px solid var(--border);
+    display: flex; padding: 0 28px; gap: 0;
+    position: sticky; top: 64px; z-index: 90; overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 16px 22px; background: none; border: none; border-bottom: 3px solid transparent;
+    font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    color: var(--mid); cursor: pointer; margin-bottom: -2px; transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .tab-btn.active { color: var(--navy); border-bottom-color: var(--gold); }
+  .tab-btn:hover:not(.active) { color: var(--navy); }
+
+  /* ── CONTENT ── */
+  .tab-panel { display: none; padding: 28px; max-width: 1400px; margin: 0 auto; }
+  .tab-panel.active { display: block; }
+
+  /* ── SECTION HEADER ── */
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 22px;
+    font-weight: 700; color: var(--navy); margin-bottom: 4px;
+  }
+  .section-sub { font-size: 13px; color: var(--mid); margin-bottom: 20px; }
+
+  /* ── TOOLBAR ── */
+  .toolbar {
+    background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .search-box {
+    flex: 1; min-width: 200px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'Barlow', sans-serif; font-size: 13px;
+  }
+  .search-box:focus { outline: none; border-color: var(--gold); }
+
+  .btn {
+    padding: 9px 16px; border-radius: 6px; border: none; cursor: pointer;
+    font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.3px; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--navy); color: #fff; }
+  .btn-primary:hover { background: var(--blue); }
+  .btn-gold { background: var(--gold); color: var(--navy); }
+  .btn-gold:hover { opacity: 0.9; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--navy); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-danger:hover { opacity: 0.9; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  .status-pill {
+    display: inline-block; padding: 3px 9px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+  }
+  .status-ok { background: var(--green-bg); color: var(--green); }
+  .status-err { background: var(--red-bg); color: var(--red); }
+  .status-info { background: #e8eef8; color: var(--blue); }
+
+  .row-count {
+    margin-left: auto; font-size: 12px; color: var(--mid);
+  }
+
+  /* ── DATA GRID ── */
+  .grid-wrap {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 10px; overflow: auto; max-height: calc(100vh - 320px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+  }
+  .data-grid {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+  }
+  .data-grid th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--navy); color: #fff;
+    padding: 10px 22px 10px 12px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+    text-align: left; white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    user-select: none;
+  }
+  .data-grid th.sortable { cursor: pointer; }
+  .data-grid th.sortable:hover { background: #1e2f48; }
+  .data-grid th.pk { background: #1a2a42; }
+  .data-grid th.pk.sortable:hover { background: #22344f; }
+  .data-grid th.actions-col { width: 120px; text-align: center; position: sticky; right: 0; z-index: 2; padding-right: 12px; }
+  .sort-arrow {
+    display: inline-block; width: 10px; margin-left: 4px;
+    color: var(--gold); font-size: 10px;
+  }
+  .sort-arrow.inactive { color: rgba(255,255,255,0.25); }
+  .col-resizer {
+    position: absolute; top: 0; right: 0; width: 6px; height: 100%;
+    cursor: col-resize; user-select: none;
+    background: transparent;
+  }
+  .col-resizer:hover, .col-resizer.active { background: rgba(255,200,0,0.4); }
+  body.col-resizing { cursor: col-resize !important; }
+  body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+  .data-grid td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: middle; max-width: 280px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .data-grid tr:hover td { background: #f8f9fd; }
+  .data-grid tr.editing td { background: #fff8e6; }
+  .data-grid tr.new-row td { background: #f0f9f1; }
+  .data-grid td.actions-col {
+    text-align: center; position: sticky; right: 0; background: inherit;
+    border-left: 1px solid var(--border);
+  }
+
+  .cell-input {
+    width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px;
+    font-family: 'Barlow', sans-serif; font-size: 12.5px; background: #fff;
+  }
+  .cell-input:focus { outline: none; border-color: var(--gold); }
+  .cell-input.num { text-align: right; }
+  .cell-input.bool { width: auto; }
+
+  .cell-readonly { color: var(--mid); font-style: italic; }
+  .cell-null { color: #c0c6d0; font-style: italic; }
+  .cell-truncate { display: inline-block; max-width: 250px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+
+  /* ── CSV UPLOAD DROPZONE ── */
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 28px;
+    text-align: center; margin-bottom: 18px; background: var(--white);
+    transition: all 0.15s;
+  }
+  .dropzone.drag { border-color: var(--gold); background: #fff8e6; }
+  .dropzone-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .dropzone-sub { font-size: 12px; color: var(--mid); margin-bottom: 14px; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(10,22,40,0.6); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white); border-radius: 12px; padding: 24px;
+    max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; margin-bottom: 10px; }
+  .modal p { font-size: 13px; color: var(--mid); margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+  /* ── IMAGE MANAGER ── */
+  .bucket-selector {
+    display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .bucket-btn {
+    padding: 10px 16px; border: 1px solid var(--border); background: var(--white);
+    border-radius: 8px; cursor: pointer;
+    font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+    color: var(--navy); display: flex; align-items: center; gap: 8px;
+    transition: all 0.15s;
+  }
+  .bucket-btn:hover { border-color: var(--gold); }
+  .bucket-btn.active { border-color: var(--gold); background: #fff8e6; }
+  .bucket-btn-count {
+    font-size: 10px; padding: 2px 7px; border-radius: 99px;
+    background: var(--bg); color: var(--mid);
+  }
+  .bucket-btn.active .bucket-btn-count { background: var(--gold); color: #fff; }
+
+  .image-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px; margin-top: 8px;
+  }
+  .image-tile {
+    background: var(--white); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; position: relative; transition: transform 0.15s;
+  }
+  .image-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .image-tile-img {
+    width: 100%; aspect-ratio: 1; object-fit: cover; background: #f3f5f9;
+    display: block;
+  }
+  .image-tile-name {
+    font-size: 10.5px; padding: 8px 10px 2px; color: var(--navy); word-break: break-all;
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .image-tile-meta {
+    font-size: 10px; padding: 0 10px 8px; color: var(--mid);
+    font-family: 'SF Mono', Consolas, monospace;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .image-tile-meta .dim-pending { color: #c0c6d0; }
+  .image-tile-actions {
+    display: flex; gap: 4px; padding: 0 8px 8px;
+  }
+  .image-tile-actions .btn { flex: 1; padding: 5px 6px; font-size: 10px; }
+  .image-tile-placeholder {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    background: #f3f5f9; color: var(--mid); font-size: 11px;
+  }
+
+  .image-empty {
+    text-align: center; padding: 40px; color: var(--mid); font-size: 13px;
+    background: var(--white); border-radius: 10px; border: 1px dashed var(--border);
+  }
+
+  /* ── TOAST ── */
+  #toast-container {
+    position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    background: var(--navy); color: #fff; padding: 12px 18px;
+    border-radius: 8px; font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    animation: slideIn 0.2s ease-out;
+    max-width: 400px;
+  }
+  .toast.success { background: var(--green); }
+  .toast.error { background: var(--red); }
+  .toast.info { background: var(--blue); }
+  @keyframes slideIn {
+    from { transform: translateX(120%); }
+    to { transform: translateX(0); }
+  }
+
+  /* ── LOADER ── */
+  .loader {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(201,168,76,0.3); border-top-color: var(--gold);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state { padding: 60px 20px; text-align: center; color: var(--mid); }
+  .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <img class="login-logo" src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate">
+    <div class="login-title">Admin Portal</div>
+    <div class="login-prompt">Sign in with your admin account</div>
+    <input id="login-email" class="login-field" type="email" placeholder="Email address" autocomplete="email">
+    <input id="login-password" class="login-field" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="login-btn" id="login-btn">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+    <a class="login-forgot" id="login-forgot" href="#">Forgot password?</a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════ -->
+<div class="header">
+  <div>
+    <div class="header-brand">FootJoy &middot; Curate</div>
+    <div class="header-title">Admin Portal</div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="last-updated"></span>
+    <button class="btn-refresh" id="btn-refresh">&#8635; Refresh</button>
+    <button class="btn-refresh" id="btn-signout" style="border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.6)">Sign Out</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TABS
+═══════════════════════════════════════════════════════ -->
+<div class="tab-bar" id="tab-bar">
+  <button class="tab-btn active" data-tab="customers">Customers</button>
+  <button class="tab-btn" data-tab="products">Products</button>
+  <button class="tab-btn" data-tab="salespeople">Salespeople</button>
+  <button class="tab-btn" data-tab="collections">Collections</button>
+  <button class="tab-btn" data-tab="subsections">Subsections</button>
+  <button class="tab-btn" data-tab="seasons">Seasons</button>
+  <button class="tab-btn" data-tab="sales_targets">Sales Targets</button>
+  <button class="tab-btn" data-tab="program_rules">Program Rules</button>
+  <button class="tab-btn" data-tab="program_products">Program Products</button>
+  <button class="tab-btn" data-tab="images">Images</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB PANELS (dynamic content injected by JS)
+═══════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="panel-customers"></div>
+<div class="tab-panel" id="panel-products"></div>
+<div class="tab-panel" id="panel-salespeople"></div>
+<div class="tab-panel" id="panel-collections"></div>
+<div class="tab-panel" id="panel-subsections"></div>
+<div class="tab-panel" id="panel-seasons"></div>
+<div class="tab-panel" id="panel-sales_targets"></div>
+<div class="tab-panel" id="panel-program_rules"></div>
+<div class="tab-panel" id="panel-program_products"></div>
+<div class="tab-panel" id="panel-images"></div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL
+═══════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════════════════════ -->
+<div id="toast-container"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>

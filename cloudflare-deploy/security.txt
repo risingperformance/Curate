@@ -1,0 +1,6 @@
+# Security contact for fjcurate.com
+# See https://securitytxt.org/ (RFC 9116)
+
+Contact: mailto:tim.p.snow@gmail.com
+Preferred-Languages: en
+Expires: 2027-04-19T00:00:00.000Z

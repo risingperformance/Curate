@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src  'self' https://cdn.jsdelivr.net;
+  style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src    https://fonts.gstatic.com;
+  img-src     'self' https://mlwzpgtdgfaczgxipbsq.supabase.co data:;
+  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  object-src  'none';
+  base-uri    'self';
+  form-action 'self';
+">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>FootJoy &mdash; Book Your Appointment</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js" integrity="sha384-Y1tzkgTMv0NgNIkhIaJiI9rqNrOLfosToPr6Bzp4XVIOvF1BUd7mNlUVPpo6G8lL" crossorigin="anonymous"></script>
+<script src="supabase-init.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --navy:   #0a1628;
+  --blue:   #1a3a6b;
+  --gold:   #c9a84c;
+  --mid:    #6b7a99;
+  --border: #dde4f0;
+  --bg:     #f4f6fb;
+  --white:  #fff;
+  --green:  #2d7d46;
+  --gbg:    #e8f5ec;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--navy); min-height: 100vh; }
+
+/* ── HEADER ── */
+.hdr {
+  background: var(--navy); padding: 20px 24px;
+  display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center;
+}
+.eyebrow { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 3px; color: var(--gold); text-transform: uppercase; margin-bottom: 6px; }
+.hdr-title { font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700; color: #fff; }
+
+/* ── MAIN ── */
+.main { max-width: 560px; margin: 0 auto; padding: 28px 20px 60px; }
+
+/* ── CARD ── */
+.card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 20px; }
+
+/* ── STATES ── */
+#s-loading, #s-error, #s-expired, #s-select, #s-confirm, #s-success { display: none; }
+#s-loading.show, #s-error.show, #s-expired.show, #s-select.show, #s-confirm.show, #s-success.show { display: block; }
+
+/* ── LOADING ── */
+.spinner { width: 44px; height: 44px; border: 4px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── FROM AM ── */
+.from-am { font-size: 14px; color: var(--mid); margin-bottom: 24px; }
+.from-am strong { color: var(--navy); }
+
+/* ── SLOT OPTIONS ── */
+.slot-list { display: grid; gap: 12px; }
+.slot-opt {
+  border: 2px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  cursor: pointer; transition: all 0.18s; display: flex; align-items: center; gap: 14px;
+}
+.slot-opt:hover { border-color: var(--gold); background: rgba(201,168,76,0.05); }
+.slot-opt.selected { border-color: var(--gold); background: rgba(201,168,76,0.1); }
+.slot-opt.unavail { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.slot-radio {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.slot-opt.selected .slot-radio { border-color: var(--gold); background: var(--gold); }
+.slot-opt.selected .slot-radio::after { content: ''; width: 8px; height: 8px; background: #fff; border-radius: 50%; }
+.slot-time { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 3px; }
+.slot-meta { font-size: 13px; color: var(--mid); }
+.slot-loc  { font-size: 13px; color: var(--navy); display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+
+/* ── FORM ── */
+.fg { margin-bottom: 18px; }
+label { display: block; font-size: 11px; font-weight: 700; color: var(--mid); margin-bottom: 6px; letter-spacing: 0.8px; text-transform: uppercase; }
+input[type=text], input[type=email] {
+  width: 100%; padding: 11px 14px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: 'Barlow', sans-serif;
+  font-size: 15px; color: var(--navy); transition: border-color 0.15s;
+}
+input:focus { outline: none; border-color: var(--gold); }
+
+/* ── BOOKING SUMMARY ── */
+.summary { background: var(--bg); border-radius: 8px; padding: 16px; margin-bottom: 22px; }
+.summary-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; font-size: 14px; }
+.summary-row:last-child { margin-bottom: 0; }
+.summary-lbl { font-weight: 600; min-width: 70px; color: var(--mid); font-size: 13px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border: none; border-radius: 8px;
+  font-family: 'Barlow', sans-serif; font-size: 15px;
+  font-weight: 600; cursor: pointer; transition: all 0.15s;
+  text-decoration: none;
+}
+.btn-primary { background: var(--navy); color: #fff; }
+.btn-primary:hover { background: var(--blue); }
+.btn-gold { background: var(--gold); color: var(--navy); }
+.btn-gold:hover { opacity: 0.9; }
+.btn-ghost { background: transparent; color: var(--navy); border: 1.5px solid var(--border); }
+.btn-ghost:hover { background: var(--bg); }
+.btn-outline-gold { background: transparent; color: var(--gold); border: 1.5px solid var(--gold); }
+.btn-outline-gold:hover { background: var(--gold); color: var(--navy); }
+.btn-full { width: 100%; justify-content: center; }
+.btn-sm { padding: 9px 18px; font-size: 13px; }
+.btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ── SUCCESS ── */
+.success-icon { font-size: 56px; text-align: center; margin-bottom: 18px; }
+.success-title { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+.success-sub   { font-size: 14px; color: var(--mid); text-align: center; line-height: 1.6; margin-bottom: 28px; }
+
+/* ── ERROR / EXPIRED ── */
+.error-icon  { font-size: 48px; text-align: center; margin-bottom: 14px; }
+.error-title { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 8px; }
+.error-sub   { font-size: 14px; color: var(--mid); text-align: center; line-height: 1.6; }
+
+/* ── SECTION TITLE ── */
+.stitle { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.sdesc  { font-size: 13px; color: var(--mid); margin-bottom: 20px; line-height: 1.5; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: var(--navy); color: #fff; padding: 13px 20px; border-radius: 8px;
+  font-size: 14px; max-width: 340px; width: 90%; text-align: center;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.25); opacity: 0; transition: all 0.3s; z-index: 999;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.err  { background: #c0272d; }
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate" style="height:72px;width:auto;margin-bottom:12px">
+  <div class="hdr-title">Book Your Appointment</div>
+</header>
+
+<main class="main">
+
+  <!-- LOADING -->
+  <div id="s-loading" class="card" style="text-align:center;padding:48px">
+    <div class="spinner"></div>
+    <p style="color:var(--mid);font-size:14px">Loading your invitation&hellip;</p>
+  </div>
+
+  <!-- ERROR -->
+  <div id="s-error" class="card" style="text-align:center;padding:48px">
+    <div class="error-icon">&#10060;</div>
+    <div class="error-title">Invitation Not Found</div>
+    <div class="error-sub" id="err-msg">This booking link is invalid or has already been used. Please contact your FootJoy account manager for a new invitation.</div>
+  </div>
+
+  <!-- EXPIRED -->
+  <div id="s-expired" class="card" style="text-align:center;padding:48px">
+    <div class="error-icon">&#9200;</div>
+    <div class="error-title">Invitation Expired</div>
+    <div class="error-sub">This booking invitation has expired. Please contact your FootJoy account manager to receive a new invitation.</div>
+  </div>
+
+  <!-- STEP 1: SELECT SLOT -->
+  <div id="s-select">
+    <div class="card">
+      <div class="stitle">Choose Your Preferred Time</div>
+      <div class="from-am" id="from-am-msg"></div>
+      <div class="slot-list" id="slot-list"></div>
+    </div>
+    <div style="text-align:center">
+      <button class="btn btn-gold btn-full" id="btn-go-confirm">Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: CONFIRM DETAILS -->
+  <div id="s-confirm">
+    <div class="card" id="confirm-summary-card">
+      <div class="stitle">Confirm Your Details</div>
+      <div class="sdesc">Please check the details below and confirm your booking.</div>
+      <div class="summary" id="slot-summary"></div>
+      <div class="fg">
+        <label>Your Name</label>
+        <input type="text" id="cust-name" placeholder="Full name" autocomplete="name">
+      </div>
+      <div class="fg">
+        <label>Your Email</label>
+        <input type="email" id="cust-email" placeholder="your@email.com" autocomplete="email">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btn-go-select">&#8592; Change Time</button>
+      <button class="btn btn-gold" id="confirm-btn">Confirm Booking</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: SUCCESS -->
+  <div id="s-success">
+    <div class="card" style="text-align:center;padding:36px">
+      <div class="success-icon">&#127881;</div>
+      <div class="success-title">You&rsquo;re Booked!</div>
+      <div class="success-sub" id="success-msg">Your appointment has been confirmed. You&rsquo;ll receive a confirmation email shortly.</div>
+      <div class="summary" id="success-summary" style="text-align:left;margin-bottom:24px"></div>
+      <div class="btn-row" style="justify-content:center;margin-bottom:16px">
+        <button class="btn btn-outline-gold btn-sm" id="btn-dl-ics">&#128197; Download Calendar File (.ics)</button>
+        <a class="btn btn-ghost btn-sm" id="gcal-link" href="#" target="_blank">+ Add to Google Calendar</a>
+      </div>
+      <p style="font-size:12px;color:var(--mid)">A confirmation email has been sent. Add the appointment to your calendar using the buttons above.</p>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="booking.js"></script>
+
+<footer style="text-align:center;padding:16px 20px 24px;font-size:11px;color:var(--mid);line-height:1.5">
+  Your personal information is collected and handled in accordance with the
+  <a href="https://www.acushnetgolf.com.au/privacy-policy" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline">Acushnet Privacy Policy</a>.
+  We only use your details to manage your prebook appointment and order. For questions, contact your FootJoy account manager.
+</footer>
+
+</body>
+</html>

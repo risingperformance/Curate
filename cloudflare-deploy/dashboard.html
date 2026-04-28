@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src  'self' https://cdn.jsdelivr.net;
+  style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src    https://fonts.gstatic.com;
+  img-src     'self' https://mlwzpgtdgfaczgxipbsq.supabase.co data:;
+  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  object-src  'none';
+  base-uri    'self';
+  form-action 'self';
+">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>FootJoy — Sales Dashboard AW2027</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js" integrity="sha384-Y1tzkgTMv0NgNIkhIaJiI9rqNrOLfosToPr6Bzp4XVIOvF1BUd7mNlUVPpo6G8lL" crossorigin="anonymous"></script>
+<script src="supabase-init.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --navy: #0a1628;
+    --blue: #1a3a6b;
+    --gold: #c9a84c;
+    --mid: #6b7a99;
+    --border: #dde4f0;
+    --bg: #f4f6fb;
+    --white: #fff;
+    --green: #2d7d46;
+    --green-bg: #e8f5ec;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--navy); min-height: 100vh; }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    position: fixed; inset: 0; background: var(--navy); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.5s;
+  }
+  #login-screen.unlocked { opacity: 0; pointer-events: none; }
+  .login-card { text-align: center; width: 340px; }
+  .login-logo { width: 180px; height: auto; margin-bottom: 20px; }
+  .login-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 24px;
+    font-weight: 700; color: #fff; margin-bottom: 32px; line-height: 1.25;
+  }
+  .login-prompt { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 20px; letter-spacing: 1px; }
+  .login-field {
+    width: 100%; padding: 12px 16px; margin-bottom: 12px;
+    background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 8px; color: #fff; font-family: 'Barlow', sans-serif; font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  .login-field::placeholder { color: rgba(255,255,255,0.35); }
+  .login-field:focus { outline: none; border-color: var(--gold); background: rgba(201,168,76,0.06); }
+  .login-btn {
+    width: 100%; padding: 12px; margin-top: 8px;
+    background: var(--gold); color: var(--navy); border: none; border-radius: 8px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: opacity 0.15s;
+  }
+  .login-btn:hover { opacity: 0.9; }
+  .login-error { font-size: 12px; color: #f08080; min-height: 18px; margin-top: 10px; transition: opacity 0.3s; }
+  .login-forgot {
+    display: inline-block; margin-top: 12px; font-size: 12px;
+    color: rgba(255,255,255,0.4); text-decoration: none; cursor: pointer;
+  }
+  .login-forgot:hover { color: rgba(255,255,255,0.7); }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--navy); padding: 0 28px; height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-brand {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    font-weight: 600; letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+    font-weight: 700; color: #fff; letter-spacing: 0.5px;
+  }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .btn-refresh {
+    padding: 7px 16px; background: rgba(255,255,255,0.1); color: #fff;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+    font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-refresh:hover { background: rgba(255,255,255,0.18); }
+  .last-updated { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* ── TABS ── */
+  .tab-bar {
+    background: var(--white); border-bottom: 2px solid var(--border);
+    display: flex; padding: 0 28px; gap: 0;
+    position: sticky; top: 64px; z-index: 90;
+  }
+  .tab-btn {
+    padding: 16px 22px; background: none; border: none; border-bottom: 3px solid transparent;
+    font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    color: var(--mid); cursor: pointer; margin-bottom: -2px; transition: color 0.15s;
+  }
+  .tab-btn.active { color: var(--navy); border-bottom-color: var(--gold); }
+  .tab-btn:hover:not(.active) { color: var(--navy); }
+
+  /* ── CONTENT ── */
+  .tab-panel { display: none; padding: 28px; max-width: 1100px; margin: 0 auto; }
+  .tab-panel.active { display: block; }
+
+  /* ── STAT CARDS ── */
+  .stat-row { display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--white); border-radius: 12px; padding: 20px 24px;
+    flex: 1; min-width: 150px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+  }
+  .stat-label { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; color: var(--mid); text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 700; color: var(--navy); }
+  .stat-value.gold { color: var(--gold); }
+
+  /* ── SECTION HEADER ── */
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 20px;
+    font-weight: 700; color: var(--navy); margin-bottom: 16px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--border);
+  }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; background: var(--white); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .data-table th {
+    background: var(--navy); color: #fff; padding: 11px 14px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    font-weight: 600; letter-spacing: 0.5px; text-align: left;
+  }
+  .data-table th.right, .data-table td.right { text-align: right; }
+  .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: #f8f9fd; }
+  .rank-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
+  }
+  .rank-1 { background: #ffd700; color: #7a5700; }
+  .rank-2 { background: #c0c0c0; color: #444; }
+  .rank-3 { background: #cd7f32; color: #fff; }
+  .rank-other { background: var(--border); color: var(--mid); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { min-width: 140px; }
+  .progress-bar-bg { background: var(--border); border-radius: 99px; height: 8px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 99px; background: var(--gold); transition: width 0.6s ease; }
+  .progress-bar-fill.complete { background: var(--green); }
+  .progress-bar-fill.over { background: #7b3fcf; }
+  .progress-pct { font-size: 11px; color: var(--mid); margin-top: 3px; }
+  .progress-pct.over { color: #7b3fcf; font-weight: 700; }
+
+  /* ── NATIONAL TARGETS ── */
+  .national-targets-row { display: flex; gap: 16px; margin-bottom: 20px; }
+  .national-target-card {
+    flex: 1; background: var(--white); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+  }
+  .national-target-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .national-target-flag { font-size: 22px; line-height: 1; }
+  .national-target-label { font-size: 13px; font-weight: 700; color: var(--navy); letter-spacing: 0.5px; flex: 1; }
+  .national-target-pct {
+    font-size: 22px; font-weight: 800; color: var(--gold);
+    font-family: 'Barlow Condensed', sans-serif; letter-spacing: -0.5px;
+  }
+  .national-target-pct.complete { color: var(--green); }
+  .national-target-pct.over { color: #7b3fcf; }
+  .national-target-bar-bg { background: var(--border); border-radius: 99px; height: 10px; overflow: hidden; margin-bottom: 8px; }
+  .national-target-bar-fill { height: 100%; border-radius: 99px; background: var(--gold); transition: width 0.8s ease; }
+  .national-target-bar-fill.complete { background: var(--green); }
+  .national-target-bar-fill.over { background: #7b3fcf; }
+  .national-target-detail { font-size: 11px; color: var(--mid); }
+  .national-target-detail strong { color: var(--dark); }
+
+  /* ── GROWTH BAR ── */
+  .growth-bar-wrap { min-width: 200px; position: relative; }
+  .growth-bar-track {
+    position: relative; height: 8px; background: var(--border);
+    border-radius: 99px; overflow: hidden;
+  }
+  .growth-bar-fill {
+    position: absolute; top: 0; height: 100%; border-radius: 99px;
+    transition: width 0.6s ease, left 0.6s ease;
+  }
+  .growth-bar-fill.positive { background: var(--green); }
+  .growth-bar-fill.negative { background: #c0424a; }
+  .growth-bar-fill.neutral  { background: var(--border); }
+  .growth-bar-center {
+    position: absolute; top: -2px; width: 2px; height: 12px;
+    background: var(--navy); border-radius: 1px; z-index: 1;
+  }
+  .growth-label { font-size: 11px; margin-top: 3px; color: var(--mid); }
+  .growth-label .growth-val { font-weight: 700; }
+  .growth-label .growth-val.positive { color: var(--green); }
+  .growth-label .growth-val.negative { color: #c0424a; }
+  .growth-label .growth-val.neutral  { color: var(--mid); }
+
+  /* ── UNITS / DOLLARS TOGGLE ── */
+  .metric-toggle { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .metric-toggle button {
+    padding: 7px 16px; background: none; border: none; cursor: pointer;
+    font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 600;
+    color: var(--mid); transition: background 0.15s, color 0.15s;
+  }
+  .metric-toggle button.active { background: var(--navy); color: #fff; }
+  .metric-toggle button:not(.active):hover { background: var(--bg); color: var(--navy); }
+
+  /* ── PRODUCT THUMBNAIL ── */
+  .thumb-wrap { position: relative; display: inline-block; line-height: 0; }
+  .thumb-img {
+    width: 44px; height: 44px; object-fit: contain; border-radius: 6px;
+    background: #f4f6fb; border: 1px solid var(--border); cursor: zoom-in; display: block;
+  }
+  .thumb-placeholder {
+    width: 44px; height: 44px; border-radius: 6px;
+    background: var(--border); display: flex; align-items: center;
+    justify-content: center; font-size: 18px; color: #aab;
+  }
+  .thumb-hover {
+    display: none; position: fixed; z-index: 9000; pointer-events: none;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 8px; width: 260px; height: 260px;
+  }
+  .thumb-hover img { width: 244px; height: 244px; object-fit: contain; border-radius: 8px; display: block; }
+  .thumb-wrap:hover .thumb-hover { display: block; }
+
+  /* ── STATUS BADGE ── */
+  .status-badge {
+    display: inline-block; padding: 3px 9px; border-radius: 99px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .status-submitted { background: #e8f5ec; color: var(--green); }
+  .status-draft     { background: #fff3e0; color: #c07000; }
+  .status-expired   { background: #fee2e2; color: #991b1b; }
+
+  .btn-open-draft {
+    padding: 5px 12px; font-family: 'Barlow', sans-serif; font-size: 12px;
+    font-weight: 600; background: var(--navy); color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 5px; transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn-open-draft:hover { background: var(--blue); }
+  .btn-delete-draft {
+    padding: 5px 10px; font-family: 'Barlow', sans-serif; font-size: 12px;
+    font-weight: 600; background: #fee2e2; color: #991b1b; border: none;
+    border-radius: 6px; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-delete-draft:hover { background: #fecaca; }
+  .draft-actions { display: flex; gap: 6px; align-items: center; }
+
+  .diff-positive { color: #2d7d46; font-weight: 700; }
+  .diff-negative { color: #c0424a; font-weight: 700; }
+  .diff-zero     { color: var(--mid); }
+
+  /* ── SORTABLE HEADERS ── */
+  .sortable { cursor: pointer; user-select: none; position: relative; white-space: nowrap; }
+  .sortable:hover { color: var(--gold); }
+  .sort-icon { margin-left: 4px; font-size: 10px; opacity: 0.4; }
+  .sortable.asc .sort-icon, .sortable.desc .sort-icon { opacity: 1; color: var(--gold); }
+
+  /* ── EXPANDABLE PRODUCT DETAIL ── */
+  .product-row { cursor: pointer; }
+  .product-row:hover td { background: #eef1fa; }
+  .product-row.expanded td { background: #eef1fa; border-bottom: none; }
+  .product-detail-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
+  .product-detail-inner {
+    padding: 16px 24px 20px 80px;
+    background: #f8f9fd;
+    border-top: 1px solid var(--border);
+  }
+  .detail-section-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    font-weight: 700; color: var(--navy); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .detail-customer-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+  .detail-customer-table th {
+    background: var(--navy); color: #fff; padding: 7px 10px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.5px; text-align: left;
+  }
+  .detail-customer-table th.right { text-align: right; }
+  .detail-customer-table td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--navy);
+  }
+  .detail-customer-table td.right { text-align: right; }
+  .detail-customer-table tr:last-child td { border-bottom: none; }
+  .detail-customer-table tr:hover td { background: #eef1fa; }
+  .detail-total-row td { font-weight: 700; background: #eef1fa !important; }
+
+  /* ── EXPANDABLE ORDER DETAIL ── */
+  .order-row { cursor: pointer; }
+  .order-row:hover td { background: #eef1fa; }
+  .order-row.expanded td { background: #eef1fa; border-bottom: none; }
+  .order-detail-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
+  .order-detail-inner {
+    padding: 16px 24px 20px 40px;
+    background: #f8f9fd;
+    border-top: 1px solid var(--border);
+  }
+  .order-detail-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+  .order-detail-table th {
+    background: var(--navy); color: #fff; padding: 7px 10px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.5px; text-align: left;
+  }
+  .order-detail-table th.right { text-align: right; }
+  .order-detail-table td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--navy);
+  }
+  .order-detail-table td.right { text-align: right; }
+  .order-detail-table tr:last-child td { border-bottom: none; }
+  .order-detail-table tr:hover td { background: #eef1fa; }
+  .order-count-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mid);
+    margin-left: 4px;
+  }
+
+  /* ── LOADING ── */
+  .loading { text-align: center; padding: 60px 20px; color: var(--mid); font-size: 14px; }
+
+  /* ── TARGET ADMIN ── */
+  .target-admin-toggle {
+    font-size: 12px; color: var(--mid); cursor: pointer; margin-left: 12px;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .target-admin-panel {
+    display: none; background: var(--white); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 20px;
+  }
+  .target-admin-panel.active { display: block; }
+  .target-admin-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+  .target-input-row { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+  .target-input-row label { font-size: 12px; color: var(--mid); width: 140px; flex-shrink: 0; }
+  .target-input-row input {
+    width: 110px; padding: 6px 10px; border: 1.5px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: 'Barlow', sans-serif;
+  }
+  .btn-save-targets {
+    padding: 8px 20px; background: var(--navy); color: #fff;
+    border: none; border-radius: 6px; font-family: 'Barlow', sans-serif;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <img class="login-logo" src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate">
+    <div class="login-title">Sales Dashboard</div>
+    <div class="login-prompt">Sign in with your FootJoy account</div>
+    <input id="login-email" class="login-field" type="email" placeholder="Email address" autocomplete="email">
+    <input id="login-password" class="login-field" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="login-btn" id="login-btn">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+    <a class="login-forgot" id="login-forgot" href="#">Forgot password?</a>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div>
+    <div class="header-brand">FootJoy</div>
+    <div class="header-title">Sales Dashboard — AW27</div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="last-updated"></span>
+    <button class="btn-refresh" id="btn-refresh-load">↺ Refresh</button>
+    <button class="btn-refresh" id="btn-sign-out" style="border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.6)">Sign Out</button>
+  </div>
+</div>
+
+<!-- ── TAB BAR ── -->
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="leaderboard">Leaderboard</button>
+  <button class="tab-btn" data-tab="top-products">Top Products</button>
+  <button class="tab-btn" data-tab="orders">All Orders</button>
+  <button class="tab-btn" data-tab="drafts">Drafts</button>
+</div>
+
+<!-- ── LEADERBOARD ── -->
+<div class="tab-panel active" id="panel-leaderboard">
+
+  <!-- National target progress bars -->
+  <div class="national-targets-row">
+    <div class="national-target-card" id="nat-target-au">
+      <div class="national-target-header">
+        <span class="national-target-flag">&#127462;&#127482;</span>
+        <span class="national-target-label">Australia - Season Target</span>
+        <span class="national-target-pct" id="nat-au-pct">-</span>
+      </div>
+      <div class="national-target-bar-bg">
+        <div class="national-target-bar-fill" id="nat-au-bar" style="width:0%"></div>
+      </div>
+      <div class="national-target-detail" id="nat-au-detail">Loading...</div>
+    </div>
+    <div class="national-target-card" id="nat-target-nz">
+      <div class="national-target-header">
+        <span class="national-target-flag">&#127475;&#127487;</span>
+        <span class="national-target-label">New Zealand - Season Target</span>
+        <span class="national-target-pct" id="nat-nz-pct">-</span>
+      </div>
+      <div class="national-target-bar-bg">
+        <div class="national-target-bar-fill" id="nat-nz-bar" style="width:0%"></div>
+      </div>
+      <div class="national-target-detail" id="nat-nz-detail">Loading...</div>
+    </div>
+  </div>
+
+  <div class="stat-row" id="summary-stats">
+    <div class="stat-card"><div class="stat-label">Total Accounts</div><div class="stat-value" id="stat-accounts">—</div></div>
+    <div class="stat-card"><div class="stat-label">Total Units</div><div class="stat-value" id="stat-units">—</div></div>
+    <div class="stat-card"><div class="stat-label">Total Value</div><div class="stat-value gold" id="stat-value">—</div></div>
+    <div class="stat-card"><div class="stat-label">Orders Submitted</div><div class="stat-value gold" id="stat-orders">—</div></div>
+  </div>
+
+  <div style="display:flex;align-items:center;margin-bottom:12px;gap:12px">
+    <div class="section-title" style="margin-bottom:0;border:none;flex:1">Account Manager Leaderboard</div>
+    <div class="metric-toggle" id="leaderboard-view-toggle">
+      <button class="active" data-view="target">Target</button>
+      <button data-view="growth">Growth</button>
+    </div>
+    <span class="target-admin-toggle" id="toggle-target-admin">Edit Targets</span>
+  </div>
+
+  <div class="target-admin-panel" id="target-admin-panel">
+    <div class="target-admin-grid" id="target-inputs"></div>
+    <button class="btn-save-targets" id="btn-save-targets">Save Targets</button>
+    <span style="font-size:11px;color:var(--mid);margin-left:12px" id="target-save-status"></span>
+  </div>
+
+  <div id="leaderboard-loading" class="loading">Loading…</div>
+  <table class="data-table" id="leaderboard-table" style="display:none">
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th>Account Manager</th>
+        <th class="right">Accounts</th>
+        <th class="right">Units</th>
+        <th class="right">Value</th>
+        <th style="min-width:180px" id="leaderboard-last-col">Progress to Target</th>
+      </tr>
+    </thead>
+    <tbody id="leaderboard-body"></tbody>
+  </table>
+</div>
+
+<!-- ── TOP PRODUCTS ── -->
+<div class="tab-panel" id="panel-top-products">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <div class="section-title" style="margin-bottom:0;border:none;flex:1" id="top-products-title">Top Products by Units</div>
+    <div class="metric-toggle" id="top-products-toggle">
+      <button id="toggle-units" class="active" data-metric="units">Units</button>
+      <button id="toggle-dollars" data-metric="dollars">Dollars (WS)</button>
+    </div>
+    <select id="collection-filter"
+      style="padding:7px 12px;border:1.5px solid var(--border);border-radius:6px;font-family:'Barlow',sans-serif;font-size:12px">
+      <option value="">All Collections</option>
+    </select>
+    <select id="group-filter"
+      style="padding:7px 12px;border:1.5px solid var(--border);border-radius:6px;font-family:'Barlow',sans-serif;font-size:12px">
+      <option value="">All Customer Groups</option>
+    </select>
+  </div>
+  <div id="top-products-loading" class="loading">Loading…</div>
+  <table class="data-table" id="top-products-table" style="display:none">
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th style="width:60px"></th>
+        <th>SKU</th>
+        <th>Product</th>
+        <th>Collection</th>
+        <th class="right">Accounts</th>
+        <th class="right" id="top-metric-header">Total Units</th>
+      </tr>
+    </thead>
+    <tbody id="top-products-body"></tbody>
+  </table>
+</div>
+
+<!-- ── ALL ORDERS ── -->
+<div class="tab-panel" id="panel-orders">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <div class="section-title" style="margin-bottom:0;border:none;flex:1">All Submitted Orders</div>
+    <button id="toggle-prebook-customers"
+      style="padding:7px 14px;border:1.5px solid var(--border);border-radius:6px;background:var(--white);font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s">
+      Show: Submitted Orders Only
+    </button>
+    <select id="rep-filter"
+      style="padding:7px 12px;border:1.5px solid var(--border);border-radius:6px;font-family:'Barlow',sans-serif;font-size:12px">
+      <option value="">All Reps</option>
+    </select>
+  </div>
+  <div id="orders-loading" class="loading">Loading…</div>
+  <table class="data-table" id="orders-table" style="display:none">
+    <thead>
+      <tr>
+        <th class="sortable" data-sort="account">Account<span class="sort-icon">▲▼</span></th>
+        <th class="sortable" data-sort="manager">Account Manager<span class="sort-icon">▲▼</span></th>
+        <th class="sortable" data-sort="country">Country<span class="sort-icon">▲▼</span></th>
+        <th class="sortable right" data-sort="units">Units<span class="sort-icon">▲▼</span></th>
+        <th class="sortable right" data-sort="value">Value<span class="sort-icon">▲▼</span></th>
+        <th class="sortable right" data-sort="prior">Prior Season<span class="sort-icon">▲▼</span></th>
+        <th class="sortable right" data-sort="diff">Difference<span class="sort-icon">▲▼</span></th>
+        <th class="sortable" data-sort="date">Date<span class="sort-icon">▲▼</span></th>
+        <th class="sortable" data-sort="status">Status<span class="sort-icon">▲▼</span></th>
+      </tr>
+    </thead>
+    <tbody id="orders-body"></tbody>
+  </table>
+</div>
+
+<!-- ── DRAFTS ── -->
+<div class="tab-panel" id="panel-drafts">
+  <div class="section-title">Shared Drafts</div>
+  <div id="drafts-loading" class="loading">Loading…</div>
+  <table class="data-table" id="drafts-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Account</th>
+        <th>Account Manager</th>
+        <th class="right">Units</th>
+        <th>Created</th>
+        <th>Expires</th>
+        <th>Status</th>
+        <th style="width:160px">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="drafts-body"></tbody>
+  </table>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>
