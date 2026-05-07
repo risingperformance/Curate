@@ -2043,23 +2043,39 @@ function showCustomerInsight() {
     { label: 'Accessories', value: cust?.previousAccessories || 0 }
   ].map(r => `<li><span>${r.label}</span><span>${r.value}</span></li>`).join('');
 
-  // Current order breakdown
-  let totalUnits = 0;
+  // Current order breakdown. Mirrors the Prior Season layout:
+  // Men's, Women's, Junior, Accessories. Rainwear is bucketed into
+  // Men's to match how the customer_season_history aggregates it.
+  let totalUnits   = 0;
+  let mensUnits    = 0;
+  let womensUnits  = 0;
+  let juniorUnits  = 0;
   let accessoryUnits = 0;
 
   Object.entries(orderData).forEach(([sku, item]) => {
     const qty = Object.values(item.sizes || {}).reduce((a, b) => a + b, 0);
+    if (qty === 0) return;
     totalUnits += qty;
-    if ((item.collectionId || '').toLowerCase() === 'accessories') {
-      accessoryUnits += qty;
-    }
+    const cid = (item.collectionId || '').toLowerCase();
+    if (cid === 'accessories')                                   accessoryUnits += qty;
+    else if (cid === 'junior')                                   juniorUnits    += qty;
+    else if (cid === 'womens' || cid.indexOf('womens') === 0)    womensUnits    += qty;
+    else if (cid === 'mens-collections' || cid === 'mens-core'
+          || cid.indexOf('mens') === 0 || cid === 'rainwear')    mensUnits      += qty;
+    // Anything else falls outside the four buckets and is only counted
+    // in the total, so the breakdown sum may be < total; that's a
+    // signal the bucketing rules above need updating.
   });
 
+  // Keep apparelUnits available for the partner-tier progress bar below;
+  // it represents everything that isn't accessories.
   const apparelUnits = totalUnits - accessoryUnits;
 
   document.getElementById('ci-current-total').textContent = totalUnits.toLocaleString();
   document.getElementById('ci-current-breakdown').innerHTML = [
-    { label: 'Apparel', value: apparelUnits },
+    { label: "Men's",       value: mensUnits      },
+    { label: "Women's",     value: womensUnits    },
+    { label: 'Junior',      value: juniorUnits    },
     { label: 'Accessories', value: accessoryUnits }
   ].map(r => `<li><span>${r.label}</span><span>${r.value}</span></li>`).join('');
 
@@ -3057,7 +3073,7 @@ async function generateCustomerPDF() {
 
   <!-- ── Seasonal banner with overlaid text ── -->
   <div class="v1-banner-wrap">
-    <img class="v1-banner-img" src="${bannerImg}" crossorigin="anonymous" />
+    <img class="v1-banner-img" src="${bannerImg}" crossorigin="anonymous" data-img-fallback="banner" data-season-id="${escapeAttr(seasonId)}" />
     <div class="v1-banner-overlay">
       <div class="v1-banner-text">
         <div class="v1-banner-title">Apparel Prebook Order</div>
@@ -3594,6 +3610,14 @@ document.addEventListener('error', function(e) {
     e.target.style.background = '#1f2937';
     e.target.style.minHeight = '200px';
     e.target.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  } else if (fb === 'banner') {
+    // PDF banner image: try the regular season image (no -banner suffix)
+    // before giving up. The CSS uses object-fit: cover so a square
+    // landing image still crops cleanly into the banner frame.
+    var sid = e.target.dataset.seasonId || '';
+    if (sid) {
+      e.target.src = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/seasonal-images/season-' + encodeURIComponent(sid) + '.jpg';
+    }
   } else if (fb === 'product') {
     e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23f3f4f6' width='100' height='100'/%3E%3C/svg%3E";
   } else if (fb === 'strip') {
