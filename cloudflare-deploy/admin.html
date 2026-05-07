@@ -103,20 +103,38 @@
   .btn-refresh:hover { background: rgba(255,255,255,0.18); }
   .last-updated { font-size: 11px; color: rgba(255,255,255,0.4); }
 
-  /* ── TABS ── */
-  .tab-bar {
+  /* ── SECTION BAR (top-level domains: Customers / Apparel / Footwear / Settings) ── */
+  .section-bar {
     background: var(--white); border-bottom: 2px solid var(--border);
     display: flex; padding: 0 28px; gap: 0;
     position: sticky; top: 64px; z-index: 90; overflow-x: auto;
   }
+  .section-btn {
+    padding: 16px 24px; background: none; border: none; border-bottom: 3px solid transparent;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--mid); cursor: pointer; margin-bottom: -2px; transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .section-btn.active { color: var(--navy); border-bottom-color: var(--gold); }
+  .section-btn:hover:not(.active) { color: var(--navy); }
+
+  /* ── SUB-TAB BARS (second level inside Apparel / Footwear / Settings) ── */
+  .tab-bar {
+    background: var(--white); border-bottom: 2px solid var(--border);
+    display: flex; padding: 0 28px; gap: 0;
+    position: sticky; top: 117px; z-index: 89; overflow-x: auto;
+  }
   .tab-btn {
-    padding: 16px 22px; background: none; border: none; border-bottom: 3px solid transparent;
+    padding: 14px 20px; background: none; border: none; border-bottom: 3px solid transparent;
     font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
     color: var(--mid); cursor: pointer; margin-bottom: -2px; transition: color 0.15s;
     white-space: nowrap;
   }
   .tab-btn.active { color: var(--navy); border-bottom-color: var(--gold); }
   .tab-btn:hover:not(.active) { color: var(--navy); }
+  .subtab-bar[hidden] { display: none; }
+  .subtab-bar:empty { display: none; }
 
   /* ── CONTENT ── */
   .tab-panel { display: none; padding: 28px; max-width: 1400px; margin: 0 auto; }
@@ -343,6 +361,189 @@
 
   .empty-state { padding: 60px 20px; text-align: center; color: var(--mid); }
   .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+
+  /* ── QUESTIONNAIRE (Footwear admin, Section 3 Phase A) ── */
+  .qn-back { margin-bottom: 12px; }
+  .qn-card {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px; margin-bottom: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+  }
+  .qn-card-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
+    font-weight: 700; color: var(--navy); margin-bottom: 6px; letter-spacing: 0.3px;
+  }
+  .qn-card-sub { font-size: 12.5px; color: var(--mid); margin-bottom: 14px; line-height: 1.5; }
+  .qn-key { font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px; color: var(--mid); }
+  .qn-key-line { font-size: 12.5px; color: var(--mid); margin-bottom: 14px; }
+  .qn-key-line code {
+    background: var(--bg); padding: 2px 6px; border-radius: 4px;
+    font-family: 'SF Mono', Consolas, monospace; color: var(--navy);
+  }
+  .qn-locked-tag {
+    display: inline-block; margin-left: 6px; font-size: 11px;
+    color: var(--amber); background: var(--amber-bg);
+    padding: 1px 7px; border-radius: 99px;
+  }
+
+  .qn-form { display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
+  .qn-form label {
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 12px; font-weight: 600; color: var(--navy); letter-spacing: 0.2px;
+  }
+  .qn-form input[type="text"],
+  .qn-form select {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'Barlow', sans-serif; font-size: 13px; background: var(--white);
+  }
+  .qn-form input[type="text"]:focus,
+  .qn-form select:focus { outline: none; border-color: var(--gold); }
+  .qn-form-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .qn-active-line { flex-direction: row !important; align-items: center; gap: 8px !important; }
+
+  .qn-list .qn-reorder-col { width: 110px; white-space: nowrap; }
+  .qn-list .qn-actions-col { width: 160px; text-align: right; }
+  .qn-list td { padding: 10px 12px; }
+
+  .qn-rule-list { list-style: none; margin: 0; padding: 0; }
+  .qn-rule {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 10px 14px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .qn-rule-text { flex: 1; line-height: 1.5; }
+  .qn-rule-preview {
+    margin-top: 4px; padding: 10px 12px;
+    background: var(--bg); border-radius: 6px; border: 1px dashed var(--border);
+    font-size: 12.5px; color: var(--navy);
+    font-style: italic;
+  }
+
+  /* ── SLIDE EDITOR (Footwear admin, Section 3 Phase B) ── */
+
+  /* Template picker gallery (modal) */
+  .tpl-gallery {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px; margin: 14px 0 6px;
+    max-height: 480px; overflow-y: auto; padding: 4px;
+  }
+  .tpl-card {
+    background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; text-align: left; cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    font-family: 'Barlow', sans-serif;
+  }
+  .tpl-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+  .tpl-card-img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 6px; background: var(--bg); display: block; margin-bottom: 8px; }
+  .tpl-card-img-empty { display: flex; align-items: center; justify-content: center; color: var(--mid); font-size: 11px; font-style: italic; }
+  .tpl-card-name { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 4px; letter-spacing: 0.3px; }
+  .tpl-card-desc { font-size: 12px; color: var(--mid); line-height: 1.4; margin-bottom: 6px; }
+  .tpl-card-key  { font-family: 'SF Mono', Consolas, monospace; font-size: 10.5px; color: var(--mid); }
+
+  /* Editor split layout */
+  .slide-editor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+  .slide-editor-form { min-width: 0; }
+  .slide-editor-preview {
+    position: sticky; top: 180px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px;
+  }
+  .slide-preview-placeholder {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 22px 14px; text-align: center;
+    color: var(--mid); font-size: 12px; line-height: 1.55;
+    background: var(--bg);
+  }
+  .slide-preview-icon {
+    font-family: 'SF Mono', Consolas, monospace; color: var(--gold);
+    margin-bottom: 10px; font-size: 13px;
+  }
+  .slide-editor-actions { display: flex; gap: 10px; }
+
+  /* Schema-driven content form */
+  .slide-content-form { display: flex; flex-direction: column; gap: 14px; }
+  .slot-block { display: flex; flex-direction: column; gap: 6px; }
+  .slot-label {
+    font-size: 12px; font-weight: 600; color: var(--navy); letter-spacing: 0.2px;
+  }
+  .slot-required { color: var(--red); margin-left: 2px; font-weight: 700; }
+  .slot-input {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'Barlow', sans-serif; font-size: 13px; background: var(--white);
+    width: 100%; box-sizing: border-box;
+  }
+  .slot-input:focus { outline: none; border-color: var(--gold); }
+  .slot-textarea { font-family: 'Barlow', sans-serif; min-height: 80px; resize: vertical; }
+  .slot-counter { font-size: 11px; color: var(--mid); text-align: right; }
+
+  /* Object slot (nested fields) */
+  .slot-object {
+    border-left: 2px solid var(--border); padding-left: 12px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  /* Media slot */
+  .slot-media { display: flex; flex-direction: column; gap: 8px; }
+  .slot-media-preview img { max-width: 220px; max-height: 140px; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  .slot-media-empty {
+    padding: 14px; border: 1px dashed var(--border); border-radius: 6px;
+    color: var(--mid); font-size: 12px; text-align: center; background: var(--bg);
+  }
+  .slot-media-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* Product picker chips */
+  .slot-products { display: flex; flex-direction: column; gap: 8px; }
+  .product-chips { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .product-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 12.5px;
+  }
+  .product-chip-label { flex: 1; }
+
+  .product-picker-results {
+    max-height: 360px; overflow-y: auto; margin-top: 12px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--white);
+  }
+  .product-result {
+    display: flex; gap: 10px; align-items: baseline;
+    width: 100%; padding: 10px 12px; background: none; border: none; cursor: pointer;
+    text-align: left; font-family: 'Barlow', sans-serif;
+    border-bottom: 1px solid var(--border);
+  }
+  .product-result:last-child { border-bottom: none; }
+  .product-result:hover { background: var(--bg); }
+  .product-result-sku  { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; color: var(--navy); min-width: 120px; }
+  .product-result-name { font-size: 12.5px; color: var(--mid); }
+
+  /* Array of objects (sub-form list) */
+  .slot-array { display: flex; flex-direction: column; gap: 10px; }
+  .array-item {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .array-item-header {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
+    color: var(--navy); letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .array-item-controls { display: flex; gap: 6px; }
+  .slot-array-actions { margin-top: 4px; }
+
+  /* CTA editor */
+  .slot-cta {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px;
+  }
+  .slot-cta label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--navy); }
+
+  /* Responsive: stack preview below form on narrow screens */
+  @media (max-width: 1100px) {
+    .slide-editor-grid { grid-template-columns: 1fr; }
+    .slide-editor-preview { position: static; }
+  }
 </style>
 </head>
 <body>
@@ -379,23 +580,43 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
-     TABS
+     SECTION BAR (top-level domains)
 ═══════════════════════════════════════════════════════ -->
-<div class="tab-bar" id="tab-bar">
-  <button class="tab-btn active" data-tab="customers">Customers</button>
-  <button class="tab-btn" data-tab="products">Products</button>
-  <button class="tab-btn" data-tab="salespeople">Salespeople</button>
-  <button class="tab-btn" data-tab="collections">Collections</button>
-  <button class="tab-btn" data-tab="subsections">Subsections</button>
-  <button class="tab-btn" data-tab="seasons">Seasons</button>
-  <button class="tab-btn" data-tab="sales_targets">Sales Targets</button>
-  <button class="tab-btn" data-tab="program_rules">Program Rules</button>
-  <button class="tab-btn" data-tab="program_products">Program Products</button>
-  <button class="tab-btn" data-tab="images">Images</button>
+<div class="section-bar" id="section-bar">
+  <button class="section-btn active" data-section="customers">Customers</button>
+  <button class="section-btn" data-section="apparel">Apparel</button>
+  <button class="section-btn" data-section="footwear">Footwear</button>
+  <button class="section-btn" data-section="settings">Settings</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
-     TAB PANELS (dynamic content injected by JS)
+     SUB-TAB BARS (one per section, the active section's bar is shown).
+     Customers and Footwear have no sub-tabs today, so their bars are empty
+     and hidden via CSS (.subtab-bar:empty).
+═══════════════════════════════════════════════════════ -->
+<div class="tab-bar subtab-bar" data-section="customers" hidden></div>
+<div class="tab-bar subtab-bar" data-section="apparel" hidden>
+  <button class="tab-btn" data-tab="products">Products</button>
+  <button class="tab-btn" data-tab="collections">Collections</button>
+  <button class="tab-btn" data-tab="subsections">Subsections</button>
+  <button class="tab-btn" data-tab="seasons">Seasons</button>
+  <button class="tab-btn" data-tab="sales_targets_apparel">Sales Targets</button>
+  <button class="tab-btn" data-tab="program_rules">Program Rules</button>
+  <button class="tab-btn" data-tab="program_products">Program Products</button>
+</div>
+<div class="tab-bar subtab-bar" data-section="footwear" hidden>
+  <button class="tab-btn" data-tab="sales_targets_footwear">Sales Targets</button>
+  <button class="tab-btn" data-tab="slides">Slides</button>
+  <button class="tab-btn" data-tab="questionnaire">Questionnaire</button>
+</div>
+<div class="tab-bar subtab-bar" data-section="settings" hidden>
+  <button class="tab-btn" data-tab="salespeople">Users</button>
+  <button class="tab-btn" data-tab="images">Brand Assets</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB PANELS (dynamic content injected by JS).
+     One panel per data table, plus a static footwear placeholder.
 ═══════════════════════════════════════════════════════ -->
 <div class="tab-panel active" id="panel-customers"></div>
 <div class="tab-panel" id="panel-products"></div>
@@ -403,7 +624,10 @@
 <div class="tab-panel" id="panel-collections"></div>
 <div class="tab-panel" id="panel-subsections"></div>
 <div class="tab-panel" id="panel-seasons"></div>
-<div class="tab-panel" id="panel-sales_targets"></div>
+<div class="tab-panel" id="panel-sales_targets_apparel"></div>
+<div class="tab-panel" id="panel-sales_targets_footwear"></div>
+<div class="tab-panel" id="panel-slides"></div>
+<div class="tab-panel" id="panel-questionnaire"></div>
 <div class="tab-panel" id="panel-program_rules"></div>
 <div class="tab-panel" id="panel-program_products"></div>
 <div class="tab-panel" id="panel-images"></div>
@@ -421,5 +645,6 @@
 <div id="toast-container"></div>
 
 <script src="admin.js"></script>
+<script src="admin-footwear.js"></script>
 </body>
 </html>

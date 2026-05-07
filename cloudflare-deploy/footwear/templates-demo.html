@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FootJoy Curate - Slide template demo</title>
+
+<!--
+  Standalone demo of the five slide templates registered with
+  fwApp.slideRenderer. Loads the actual production template scripts so
+  visual output stays in lockstep with the live site, but mocks the
+  Supabase + cart services so it can run without auth or a network.
+
+  Sample content is hard-coded below in DEMO_SLIDES; tweak the values
+  there to try variations.
+-->
+
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="templates/styles.css">
+
+<style>
+  /* Demo chrome only - the templates inside the stage use the real
+     production CSS imported above. */
+  body {
+    background: #f3f4f6;
+    color: var(--fj-black);
+    font-family: 'Barlow', sans-serif;
+  }
+  .demo-header {
+    background: #000;
+    color: #fff;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
+  }
+  .demo-header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 600;
+  }
+  .demo-header-eyebrow {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 4px; text-transform: uppercase;
+    color: var(--fj-gold);
+    margin-bottom: 4px;
+  }
+  .demo-header-meta {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+
+  .demo-shell {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 28px 32px 80px;
+  }
+
+  .demo-tabs {
+    display: flex; gap: 4px;
+    border-bottom: 2px solid var(--fj-border);
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .demo-tab {
+    padding: 12px 18px;
+    background: transparent; border: none; cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--fj-mid);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .demo-tab:hover { color: var(--fj-navy); }
+  .demo-tab-active {
+    color: var(--fj-navy); border-bottom-color: var(--fj-gold);
+  }
+  .demo-tab-key {
+    display: block;
+    font-size: 10px; font-weight: 500; letter-spacing: 1px;
+    color: var(--fj-mid); margin-top: 1px;
+  }
+  .demo-tab-active .demo-tab-key { color: var(--fj-gold); }
+
+  .demo-blurb {
+    background: #fff;
+    border: 1px solid var(--fj-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--fj-black);
+  }
+  .demo-blurb b {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--fj-gold);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .demo-blurb code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: var(--fj-light);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .demo-stage-frame {
+    background: #fff;
+    border: 1px solid var(--fj-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--fj-card-shadow);
+    min-height: 480px;
+  }
+  /* The deck-slide is the same class production uses. The template's
+     own CSS hooks in via .tpl-{key}. */
+  .deck-slide { display: block; }
+
+  .demo-footer-note {
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--fj-mid);
+    text-align: center;
+  }
+  .demo-footer-note code {
+    font-family: 'SF Mono', Consolas, monospace;
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--fj-border);
+  }
+</style>
+</head>
+<body>
+
+<header class="demo-header">
+  <div>
+    <div class="demo-header-eyebrow">FootJoy Curate</div>
+    <div class="demo-header-title">Slide template demo</div>
+  </div>
+  <div class="demo-header-meta">5 templates loaded</div>
+</header>
+
+<div class="demo-shell">
+
+  <nav class="demo-tabs" id="demo-tabs"></nav>
+
+  <div class="demo-blurb" id="demo-blurb"></div>
+
+  <div class="demo-stage-frame">
+    <div class="deck-slide" id="demo-stage"></div>
+  </div>
+
+  <div class="demo-footer-note">
+    Templates are loaded from <code>templates/*.js</code>. Demo data lives in <code>templates-demo.html</code>; edit <code>DEMO_SLIDES</code> at the bottom to try variations.
+  </div>
+
+</div>
+
+<!--
+  Bootstrap fwApp before the templates load. We mock the slideRenderer
+  registry, the cart helpers (renderProductCard / wireProductCard), and
+  a stub Supabase client that resolves with the demo product list.
+-->
+<script>
+(function () {
+  'use strict';
+
+  // ── Mock fwApp namespace ────────────────────────────────────────────
+  window.fwApp = window.fwApp || {};
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+  function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+
+  window.fwApp.escapeHtml = escapeHtml;
+  window.fwApp.escapeAttr = escapeAttr;
+  window.fwApp.state = { reviewMode: false, country: 'AU' };
+
+  // ── Demo product fixtures ───────────────────────────────────────────
+  // Match the schema of cart.renderProductCard: id, sku, base_sku, name,
+  // sizes (array), width, exclusive, colour, is_new, is_top_seller,
+  // aud_ws_price, aud_rrp_price, nzd_ws_price, nzd_rrp_price.
+  var IMG = 'https://picsum.photos/seed/';
+  var DEMO_PRODUCTS = {
+    'demo-1': {
+      id: 'demo-1', sku: '55401M-90', base_sku: '55401',
+      name: 'Pro/SLX Carbon',
+      sizes: ['7','8','9','10','11','12'],
+      width: 'M', exclusive: '', colour: 'White / Navy',
+      is_new: true, is_top_seller: true,
+      aud_ws_price: 215, aud_rrp_price: 369,
+      nzd_ws_price: 230, nzd_rrp_price: 399,
+      _img: IMG + 'fj1/600/600',
+    },
+    'demo-2': {
+      id: 'demo-2', sku: '53910W-95', base_sku: '53910',
+      name: 'Hyperflex',
+      sizes: ['7','8','9','10','11','12','13'],
+      width: 'W', exclusive: '', colour: 'Black / Red',
+      is_new: false, is_top_seller: true,
+      aud_ws_price: 175, aud_rrp_price: 299,
+      nzd_ws_price: 189, nzd_rrp_price: 319,
+      _img: IMG + 'fj2/600/600',
+    },
+    'demo-3': {
+      id: 'demo-3', sku: '56102M-85', base_sku: '56102',
+      name: 'Premiere Series Wilcox',
+      sizes: ['7','8','9','10','11','12'],
+      width: 'M', exclusive: 'AU/NZ', colour: 'Saddle',
+      is_new: true, is_top_seller: false,
+      aud_ws_price: 245, aud_rrp_price: 419,
+      nzd_ws_price: 259, nzd_rrp_price: 449,
+      _img: IMG + 'fj3/600/600',
+    },
+    'demo-4': {
+      id: 'demo-4', sku: '57711M-88', base_sku: '57711',
+      name: 'Stratos',
+      sizes: ['7','8','9','10','11'],
+      width: 'M', exclusive: '', colour: 'Charcoal / Lime',
+      is_new: false, is_top_seller: false,
+      aud_ws_price: 159, aud_rrp_price: 269,
+      nzd_ws_price: 169, nzd_rrp_price: 289,
+      _img: IMG + 'fj4/600/600',
+    }
+  };
+
+  // ── Mock Supabase client ────────────────────────────────────────────
+  // Only supports the from('products').select(...).in('id', ids) and
+  // .eq('id', id).single() chains used by product_grid + split_story.
+  var supaMock = {
+    from: function (_table) {
+      var state = { ids: null, single: false, eqId: null };
+      var api = {
+        select: function () { return api; },
+        in: function (col, ids) { state.ids = ids.slice(); return execList(); },
+        eq: function (col, val) { state.eqId = val; return api; },
+        single: function () { state.single = true; return execSingle(); }
+      };
+      function execList() {
+        return Promise.resolve({
+          data: (state.ids || []).map(function (id) { return DEMO_PRODUCTS[id]; }).filter(Boolean),
+          error: null
+        });
+      }
+      function execSingle() {
+        var p = DEMO_PRODUCTS[state.eqId];
+        return Promise.resolve(p
+          ? { data: p, error: null }
+          : { data: null, error: { message: 'Product not found in demo fixtures' } });
+      }
+      return api;
+    }
+  };
+
+  // ── Mock cart helpers ───────────────────────────────────────────────
+  // Reproduces cart.renderProductCard markup so product_grid + split_story
+  // look pixel-identical to production. Interactions are inert in the demo.
+  function fmtPrice(n) {
+    if (n == null) return null;
+    var num = Number(n);
+    if (isNaN(num)) return null;
+    return '$' + num.toFixed(2);
+  }
+  function priceFor(product) {
+    return window.fwApp.state.country === 'NZ'
+      ? { ws: product.nzd_ws_price, rrp: product.nzd_rrp_price }
+      : { ws: product.aud_ws_price, rrp: product.aud_rrp_price };
+  }
+  function renderProductCard(product) {
+    var sizes = Array.isArray(product.sizes) ? product.sizes : [];
+    var width = product.width || null;
+    var price = priceFor(product);
+    var imgUrl = product._img || '';
+
+    var badges = ''
+      + (product.is_new        ? '<span class="pcard-badge pcard-badge-new">New</span>'         : '')
+      + (product.is_top_seller ? '<span class="pcard-badge pcard-badge-top">Top Seller</span>' : '')
+      + (product.exclusive     ? '<span class="pcard-badge pcard-badge-excl">' + escapeHtml(product.exclusive) + '</span>' : '')
+      + (width                 ? '<span class="pcard-badge pcard-badge-width">Width ' + escapeHtml(width) + '</span>' : '');
+
+    var sizesHtml = sizes.map(function (s) {
+      return ''
+        + '<div class="size-col">'
+        +   '<span class="size-label">' + escapeHtml(s) + '</span>'
+        +   '<button class="size-btn" data-fw-cart-size="' + escapeAttr(s) + '" type="button">&mdash;</button>'
+        + '</div>';
+    }).join('');
+
+    var ws = fmtPrice(price.ws);
+    var rrp = fmtPrice(price.rrp);
+    var priceHtml = ws
+      ? '<div class="pcard-price">' + ws
+        + (rrp ? '<span class="pcard-rrp">RRP ' + rrp + '</span>' : '')
+        + '</div>'
+      : '';
+
+    var detailsHtml = product.colour
+      ? '<div class="pcard-details">' + escapeHtml(product.colour) + '</div>'
+      : '';
+
+    return ''
+      + '<div class="pcard" data-fw-product-id="' + escapeAttr(product.id) + '">'
+      +   '<div class="pcard-img-wrap">'
+      +     '<img class="pcard-img" alt="" src="' + escapeAttr(imgUrl) + '">'
+      +   '</div>'
+      +   '<div class="pcard-meta-row">'
+      +     badges
+      +     '<span class="pcard-sku">' + escapeHtml(product.sku || '') + '</span>'
+      +   '</div>'
+      +   '<div class="pcard-name">' + escapeHtml(product.name || '') + '</div>'
+      +   detailsHtml
+      +   priceHtml
+      +   (sizes.length > 0
+          ? '<div class="pcard-sizes">' + sizesHtml + '</div>'
+            + '<div class="pcard-actions">'
+            +   '<button class="pcard-add-all" type="button">+ Add 1 to all</button>'
+            +   '<button class="pcard-clear" type="button">Clear</button>'
+            + '</div>'
+          : '<div class="pcard-no-sizes">No sizes available for this product.</div>')
+      + '</div>';
+  }
+  function wireProductCard(card, product) {
+    // In the demo, size buttons just toggle the active state for visual
+    // feedback. No cart writes.
+    card.querySelectorAll('.size-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.classList.toggle('size-btn-active');
+        btn.textContent = btn.classList.contains('size-btn-active') ? '1' : '—';
+      });
+    });
+    card.querySelectorAll('.pcard-add-all').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        card.querySelectorAll('.size-btn').forEach(function (b) {
+          b.classList.add('size-btn-active');
+          b.textContent = '1';
+        });
+      });
+    });
+    card.querySelectorAll('.pcard-clear').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        card.querySelectorAll('.size-btn').forEach(function (b) {
+          b.classList.remove('size-btn-active');
+          b.textContent = '—';
+        });
+      });
+    });
+  }
+
+  window.fwApp.cart = {
+    renderProductCard: renderProductCard,
+    wireProductCard:   wireProductCard,
+    add: function () { /* inert in demo */ }
+  };
+
+  // Toast stub
+  window.fwApp.toast = function (msg) { console.log('[demo toast]', msg); };
+
+  // Expose a tiny services helper to mimic deck.js
+  window.fwApp.services = {
+    escapeHtml: escapeHtml,
+    escapeAttr: escapeAttr,
+    supa:       supaMock,
+    cart:       window.fwApp.cart,
+    toast:      window.fwApp.toast
+  };
+})();
+</script>
+
+<!-- Production template scripts: each registers itself with fwApp.slideRenderer.
+     product_grid was removed in Phase 5 of the slide-product-strip refactor;
+     attached products now render via the slide-level strip drawer instead. -->
+<script src="slide-renderer.js"></script>
+<script src="templates/hero_full_bleed.js"></script>
+<script src="templates/video_focus.js"></script>
+<script src="templates/tabbed_feature_showcase.js"></script>
+<script src="templates/split_story.js"></script>
+
+<!-- Demo controller: tab switching + sample slide payloads -->
+<script>
+(function () {
+  'use strict';
+
+  var HERO_BG = 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&w=1920&q=80';
+  var TFS_HERO_PERF = 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?auto=format&fit=crop&w=1600&q=80';
+  var TFS_HERO_STYLE = 'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?auto=format&fit=crop&w=1600&q=80';
+  var TFS_HERO_CMFRT = 'https://images.unsplash.com/photo-1587563871167-1ee9c731aefb?auto=format&fit=crop&w=1600&q=80';
+  var SPLIT_IMG = 'https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb?auto=format&fit=crop&w=1200&q=80';
+  var DETAIL_IMG_1 = 'https://picsum.photos/seed/fj-detail-a/600/600';
+  var DETAIL_IMG_2 = 'https://picsum.photos/seed/fj-detail-b/600/600';
+  var DETAIL_IMG_3 = 'https://picsum.photos/seed/fj-detail-c/600/600';
+  var DETAIL_IMG_4 = 'https://picsum.photos/seed/fj-detail-d/600/600';
+  // Free sample MP4 for video_focus
+  var SAMPLE_MP4 = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+  var DEMO_SLIDES = [
+    {
+      key:   'hero_full_bleed',
+      label: 'Hero',
+      blurb: 'Full-bleed image or video with overlaid title, subtitle, and optional CTA. Great for the opening slide of a deck.',
+      slide: {
+        template_key: 'hero_full_bleed',
+        content: {
+          background_url: HERO_BG,
+          background_type: 'image',
+          title: 'AW27 Footwear',
+          subtitle: 'Engineered for the next round. Tour-grade traction, all-day comfort, and the silhouettes your customers ask for by name.',
+          cta_label: 'Start the deck',
+          cta_target: 'https://www.footjoy.com'
+        }
+      }
+    },
+    {
+      key:   'video_focus',
+      label: 'Video',
+      blurb: 'Single 16:9 video player with a caption underneath and an optional CTA. Use it for technology stories or pro testimonials.',
+      slide: {
+        template_key: 'video_focus',
+        content: {
+          video_url: SAMPLE_MP4,
+          poster_url: 'https://picsum.photos/seed/fj-video-poster/1280/720',
+          caption: 'A look inside the lab where the AW27 carbon spike is tuned for tour-grade rotational stiffness.',
+          cta_label: 'Add the Pro/SLX',
+          cta_target: 'add_to_cart:demo-1'
+        }
+      }
+    },
+    {
+      key:   'tabbed_feature_showcase',
+      label: 'Tabbed showcase',
+      blurb: 'Up to three tabs across the top. Each tab can have a hero, a sidebar of clickable items that swap the hero, and a media grid below.',
+      slide: {
+        template_key: 'tabbed_feature_showcase',
+        content: {
+          tabs: [
+            {
+              label: 'Performance',
+              hero_url: TFS_HERO_PERF,
+              sidebar_items: [
+                { label: 'Carbon spike', caption: 'Stiffness where you need it.', target_url: DETAIL_IMG_1 },
+                { label: 'Wide platform', caption: 'Stability through impact.',  target_url: DETAIL_IMG_2 },
+                { label: 'Tour outsole',  caption: 'Tested by tour staff.',      target_url: DETAIL_IMG_3 }
+              ]
+            },
+            {
+              label: 'Style',
+              hero_url: TFS_HERO_STYLE,
+              media_grid: [
+                { type: 'image', url: DETAIL_IMG_1, caption: 'Saddle premium leather' },
+                { type: 'image', url: DETAIL_IMG_2, caption: 'Tonal Black / Red' },
+                { type: 'image', url: DETAIL_IMG_3, caption: 'Charcoal / Lime' },
+                { type: 'image', url: DETAIL_IMG_4, caption: 'White / Navy classic' }
+              ]
+            },
+            {
+              label: 'Comfort',
+              hero_url: TFS_HERO_CMFRT,
+              sidebar_items: [
+                { label: 'Cushion stack', caption: 'All-day energy return.', target_url: DETAIL_IMG_4 },
+                { label: 'Soft collar',   caption: 'Memory foam at the heel.', target_url: DETAIL_IMG_2 }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      key:   'split_story',
+      label: 'Split story',
+      blurb: 'Image or video on one side, copy on the other. Optionally drop in an inline product card so the rep can add to cart from the slide.',
+      slide: {
+        template_key: 'split_story',
+        content: {
+          media_url: SPLIT_IMG,
+          media_position: 'left',
+          heading: 'The Pro/SLX Carbon',
+          body: 'Our flagship spike, refined for AW27. A new midsole geometry adds 6mm of forefoot cushioning while keeping the carbon plate locked in for rotational drive.\n\nOn course it is the same shoe your customers know by name, but with measurable comfort gains over a 36-hole weekend.',
+          inline_product_id: 'demo-1',
+          cta: { label: 'Add to order', target: 'add_to_cart:demo-1' }
+        }
+      }
+    }
+  ];
+
+  var stage    = document.getElementById('demo-stage');
+  var tabsBar  = document.getElementById('demo-tabs');
+  var blurbBar = document.getElementById('demo-blurb');
+  var activeIdx = 0;
+  var cleanup = function () {};
+
+  function paintTabs() {
+    tabsBar.innerHTML = DEMO_SLIDES.map(function (s, i) {
+      var cls = 'demo-tab' + (i === activeIdx ? ' demo-tab-active' : '');
+      return '<button class="' + cls + '" data-idx="' + i + '">'
+        + s.label
+        + '<span class="demo-tab-key">' + s.key + '</span>'
+        + '</button>';
+    }).join('');
+    tabsBar.querySelectorAll('[data-idx]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.dataset.idx, 10);
+        if (isNaN(i) || i === activeIdx) return;
+        activeIdx = i;
+        paintTabs();
+        renderActive();
+      });
+    });
+  }
+
+  function renderActive() {
+    var entry = DEMO_SLIDES[activeIdx];
+    blurbBar.innerHTML = '<b>' + entry.label + '  &middot;  ' + entry.key + '</b>' + entry.blurb;
+    try { cleanup(); } catch (e) { /* ignore */ }
+    stage.innerHTML = '';
+    cleanup = window.fwApp.slideRenderer.renderSlide(entry.slide, stage, window.fwApp.services) || function () {};
+  }
+
+  paintTabs();
+  renderActive();
+})();
+</script>
+
+</body>
+</html>

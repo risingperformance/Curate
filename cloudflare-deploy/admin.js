@@ -48,12 +48,31 @@ const TABLES = {
     orderBy: 'season_id',
     bulkOrderable: true,
   },
-  sales_targets: {
+  // sales_targets is one physical table with a category column; the admin
+  // surfaces it as two virtual sub-tabs (one filtered to apparel, one to
+  // footwear). loadTable / saveChanges / deleteRow / commitCsvUpload all
+  // honour cfg.physicalTable, cfg.filter, and cfg.defaults.
+  sales_targets_apparel: {
     label: 'Sales Targets',
-    pk: 'name,season',           // composite semantic key (also CSV upsert onConflict)
-    rowKey: ['name', 'season'],  // composite row key for internal state tracking
+    physicalTable: 'sales_targets',
+    pk: 'name,season,category',           // CSV upsert onConflict
+    rowKey: ['name', 'season', 'category'],
     orderBy: 'name',
     bulkOrderable: true,
+    filter:    { category: 'apparel' },
+    defaults:  { category: 'apparel' },
+    hiddenCols: ['category'],
+  },
+  sales_targets_footwear: {
+    label: 'Sales Targets',
+    physicalTable: 'sales_targets',
+    pk: 'name,season,category',
+    rowKey: ['name', 'season', 'category'],
+    orderBy: 'name',
+    bulkOrderable: true,
+    filter:    { category: 'footwear' },
+    defaults:  { category: 'footwear' },
+    hiddenCols: ['category'],
   },
   program_rules: {
     label: 'Program Rules',
@@ -78,13 +97,86 @@ const IMAGE_BUCKETS = [
   { id: 'pos_images',      label: 'POS Images',     icon: '🛍️' },
 ];
 
+// Top-level admin sections (introduced AW27 footwear, Section 2). Each
+// section owns zero or more sub-tabs from the TABLES config above.
+const SECTIONS = {
+  customers: {
+    label: 'Customers',
+    defaultTab: 'customers',
+    tabs: ['customers'],
+  },
+  apparel: {
+    label: 'Apparel',
+    defaultTab: 'products',
+    tabs: ['products', 'collections', 'subsections', 'seasons',
+           'sales_targets_apparel', 'program_rules', 'program_products'],
+  },
+  footwear: {
+    label: 'Footwear',
+    defaultTab: 'sales_targets_footwear',
+    tabs: ['sales_targets_footwear', 'slides', 'questionnaire'],
+  },
+  settings: {
+    label: 'Settings',
+    defaultTab: 'salespeople',
+    tabs: ['salespeople', 'images'],
+  },
+};
+
+// Reverse lookup: which section does a given tab belong to?
+const TAB_TO_SECTION = (() => {
+  const m = {};
+  for (const [section, cfg] of Object.entries(SECTIONS)) {
+    for (const t of cfg.tabs) m[t] = section;
+  }
+  return m;
+})();
+
+// URL slug <-> internal tab key, scoped per section so the same slug can
+// live under more than one section (e.g. 'sales-targets' under both
+// /apparel and /footwear, 'products' likewise once Section 3 lands).
+const TAB_SLUGS_BY_SECTION = {
+  customers: { 'customers': 'customers' },
+  apparel: {
+    'products':         'products',
+    'collections':      'collections',
+    'subsections':      'subsections',
+    'seasons':          'seasons',
+    'sales-targets':    'sales_targets_apparel',
+    'program-rules':    'program_rules',
+    'program-products': 'program_products',
+  },
+  footwear: {
+    'sales-targets':    'sales_targets_footwear',
+    'slides':           'slides',
+    'questionnaire':    'questionnaire',
+  },
+  settings: {
+    'users':            'salespeople',
+    'brand-assets':     'images',
+  },
+};
+
+// Each tab key has exactly one display slug (used when we build URLs).
+const TAB_KEY_TO_SLUG = (() => {
+  const m = {};
+  for (const slugs of Object.values(TAB_SLUGS_BY_SECTION)) {
+    for (const [slug, key] of Object.entries(slugs)) {
+      m[key] = slug;
+    }
+  }
+  return m;
+})();
+
 // In-memory state
 const state = {
   data: {},        // { customers: [...], products: [...], ... }
   columns: {},     // { customers: ['account_code', 'account_name', ...], ... }
   dirty: {},       // { tableName: { rowKey: { col: newValue } } }
   newRows: {},     // { tableName: [ {col: val} ] }
+  activeSection: 'customers',
   activeTab: 'customers',
+  lastTabBySection: {},  // remembers last visited sub-tab per section
   search: {},      // { tableName: searchString }
   sort: {},        // { tableName: { col: 'name', dir: 'asc' | 'desc' } | null }
   colWidths: {},   // { tableName: { col: pixels } }
@@ -206,33 +298,89 @@ function unlockAdmin() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function init() {
-  setupTabs();
-  await loadTable('customers');
-  renderTable('customers');
   setupImageTab();
-  // Lazy-load other tables on tab click
+  await setupTabs();
 }
 
-function setupTabs() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.getElementById(`panel-${tab}`).classList.add('active');
-      state.activeTab = tab;
-
-      if (tab === 'images') {
-        loadBucketFiles(state.activeBucket);
-      } else if (TABLES[tab]) {
-        if (!state.data[tab]) {
-          await loadTable(tab);
-        }
-        renderTable(tab);
-      }
+// Wires the section + sub-tab buttons, restores section/tab from the URL,
+// and sets up popstate handling for browser back/forward.
+async function setupTabs() {
+  document.querySelectorAll('.section-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activateSection(btn.dataset.section);
     });
   });
+
+  document.querySelectorAll('.subtab-bar .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activateTab(btn.dataset.tab);
+    });
+  });
+
+  window.addEventListener('popstate', () => {
+    const loc = parseLocation();
+    activateSection(loc.section, { skipUrl: true, initialTab: loc.tab });
+  });
+
+  const initial = parseLocation();
+  await activateSection(initial.section, { skipUrl: true, initialTab: initial.tab });
+}
+
+// Switch top-level section. Activates the section's preferred sub-tab
+// (caller-provided initialTab > last-visited > section default).
+async function activateSection(section, opts = {}) {
+  const cfg = SECTIONS[section];
+  if (!cfg) return;
+
+  document.querySelectorAll('.section-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.section === section);
+  });
+  document.querySelectorAll('.subtab-bar').forEach(bar => {
+    bar.hidden = bar.dataset.section !== section;
+  });
+  state.activeSection = section;
+
+  let targetTab = opts.initialTab;
+  if (!targetTab || TAB_TO_SECTION[targetTab] !== section) {
+    targetTab = state.lastTabBySection[section] || cfg.defaultTab;
+  }
+  await activateTab(targetTab, { skipUrl: opts.skipUrl });
+}
+
+// Switch sub-tab (and panel). If the tab belongs to a different section,
+// switch sections first.
+async function activateTab(tab, opts = {}) {
+  const section = TAB_TO_SECTION[tab];
+  if (!section) return;
+
+  if (section !== state.activeSection) {
+    return activateSection(section, { skipUrl: opts.skipUrl, initialTab: tab });
+  }
+
+  document.querySelectorAll('.subtab-bar .tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panelEl = document.getElementById(`panel-${tab}`);
+  if (panelEl) panelEl.classList.add('active');
+
+  state.activeTab = tab;
+  state.lastTabBySection[section] = tab;
+
+  if (!opts.skipUrl) updateLocation();
+
+  if (tab === 'images') {
+    loadBucketFiles(state.activeBucket);
+  } else if (TABLES[tab]) {
+    if (!state.data[tab]) await loadTable(tab);
+    renderTable(tab);
+  } else if (window.curateFootwear && typeof window.curateFootwear[tab] === 'function') {
+    // Tabs that aren't backed by the generic data grid (questionnaire,
+    // slides, etc.) register a renderer on window.curateFootwear[tab] from
+    // admin-footwear.js. Each renderer is responsible for filling its
+    // panel-${tab} div.
+    await window.curateFootwear[tab]();
+  }
 }
 
 function refreshActiveTab() {
@@ -245,16 +393,87 @@ function refreshActiveTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// URL ROUTING
+// Path form (preferred, requires _redirects):
+//   /admin                       -> Customers
+//   /admin/customers             -> Customers
+//   /admin/apparel               -> Apparel default sub-tab
+//   /admin/apparel/products      -> Apparel > Products
+//   /admin/footwear              -> Footwear placeholder
+//   /admin/settings/users        -> Settings > Users
+// Hash form (fallback when loaded as /admin.html):
+//   admin.html#apparel/products
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function parseLocation() {
+  const path = window.location.pathname.replace(/\/$/, '');
+  const m = /^\/admin(?:\/([^\/]+))?(?:\/([^\/]+))?$/.exec(path);
+  if (m) {
+    const section = (m[1] === undefined) ? 'customers'
+                  : SECTIONS[m[1]] ? m[1] : null;
+    if (section) {
+      const slugMap = TAB_SLUGS_BY_SECTION[section] || {};
+      const tab = m[2] && slugMap[m[2]] ? slugMap[m[2]] : null;
+      return { section, tab };
+    }
+  }
+
+  const hash = window.location.hash.replace(/^#/, '');
+  if (hash) {
+    const [hs, hsub] = hash.split('/');
+    if (SECTIONS[hs]) {
+      const slugMap = TAB_SLUGS_BY_SECTION[hs] || {};
+      const tab = hsub && slugMap[hsub] ? slugMap[hsub] : null;
+      return { section: hs, tab };
+    }
+  }
+
+  return { section: 'customers', tab: 'customers' };
+}
+
+function updateLocation() {
+  const section = state.activeSection;
+  const tab = state.activeTab;
+  const cfg = SECTIONS[section];
+  const tabSlug = TAB_KEY_TO_SLUG[tab];
+  const showsSubInUrl = tab && tab !== cfg.defaultTab && tabSlug;
+
+  const isPathMode = /^\/admin(?:\/|$)/.test(window.location.pathname);
+  let nextUrl;
+  if (isPathMode) {
+    nextUrl = `/admin/${section}` + (showsSubInUrl ? `/${tabSlug}` : '');
+    if (window.location.pathname === nextUrl) return;
+  } else {
+    const hash = `#${section}` + (showsSubInUrl ? `/${tabSlug}` : '');
+    nextUrl = window.location.pathname + window.location.search + hash;
+    if (window.location.hash === hash) return;
+  }
+
+  try {
+    history.pushState(null, '', nextUrl);
+  } catch (e) {
+    // pushState may refuse cross-origin URLs. Fail open: drop the URL
+    // update rather than throw inside a click handler.
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function loadTable(tableName) {
   const cfg = TABLES[tableName];
-  let query = supa.from(tableName).select('*');
+  const physicalTable = cfg.physicalTable || tableName;
+  let query = supa.from(physicalTable).select('*');
+  if (cfg.filter) {
+    for (const [col, val] of Object.entries(cfg.filter)) {
+      query = query.eq(col, val);
+    }
+  }
   if (cfg.orderBy) query = query.order(cfg.orderBy, { ascending: true });
   const { data, error } = await query;
   if (error) {
-    toast('Error loading ' + tableName + '. Please refresh and try again.', 'error');
+    toast('Error loading ' + cfg.label + '. Please refresh and try again.', 'error');
     return;
   }
   state.data[tableName] = data || [];
@@ -297,7 +516,13 @@ function renderTable(tableName) {
   const cfg = TABLES[tableName];
   const panel = document.getElementById(`panel-${tableName}`);
   const rows = state.data[tableName] || [];
-  const cols = state.columns[tableName] || [];
+  // state.columns keeps the full column list so addNewRow / saveChanges
+  // know about audit columns like 'category'. The visible col list filters
+  // out cfg.hiddenCols so the user does not see or have to set the column
+  // that is auto-applied by the sub-tab's filter/defaults.
+  const allCols = state.columns[tableName] || [];
+  const hidden = new Set(cfg.hiddenCols || []);
+  const cols = allCols.filter(c => !hidden.has(c));
   const searchTerm = (state.search[tableName] || '').toLowerCase();
   const newRowCount = (state.newRows[tableName] || []).length;
   const dirtyCount = Object.keys(state.dirty[tableName] || {}).length;
@@ -641,9 +866,14 @@ function revertRow(tableName, rowKey) {
 
 function addNewRow(tableName) {
   if (!state.newRows[tableName]) state.newRows[tableName] = [];
+  const cfg = TABLES[tableName];
   const cols = state.columns[tableName];
   const blank = {};
   cols.forEach(c => blank[c] = '');
+  // Pre-fill cfg.defaults so virtual sub-tabs (e.g. sales_targets_apparel)
+  // start with the right category set. The user does not see the hidden
+  // column but the value is in state and travels through saveChanges.
+  if (cfg.defaults) Object.assign(blank, cfg.defaults);
   state.newRows[tableName].push(blank);
   renderTable(tableName);
   toast('Fill in the highlighted row, then click Save', 'info');
@@ -704,13 +934,35 @@ async function saveChanges(tableName) {
   // let the DB generate the rowKey (e.g. uuid id).
   const rowKeyCols = getRowKeyCols(cfg);
   const rowKeyConflict = rowKeyCols.join(','); // Supabase accepts comma-separated composite keys
+  const physicalTable = cfg.physicalTable || tableName;
+
+  // Apply cfg.defaults (e.g. category=apparel for the apparel sales-targets
+  // sub-tab) to any insert that does not explicitly provide them. This keeps
+  // virtual-table sub-tabs from accidentally writing rows that violate NOT
+  // NULL or land outside the filter.
+  if (cfg.defaults) {
+    for (const row of inserts) {
+      for (const [k, v] of Object.entries(cfg.defaults)) {
+        if (row[k] === undefined || row[k] === null || row[k] === '') row[k] = v;
+      }
+    }
+    // Also defend updates: if the updated row dropped the filter column,
+    // restore it to the configured default rather than write a row that
+    // would disappear from this view.
+    for (const row of updates) {
+      for (const [k, v] of Object.entries(cfg.defaults)) {
+        if (row[k] === undefined || row[k] === null || row[k] === '') row[k] = v;
+      }
+    }
+  }
+
   let saveError = null;
   if (updates.length > 0) {
-    const { error } = await supa.from(tableName).upsert(updates, { onConflict: rowKeyConflict });
+    const { error } = await supa.from(physicalTable).upsert(updates, { onConflict: rowKeyConflict });
     if (error) saveError = error;
   }
   if (!saveError && inserts.length > 0) {
-    const { error } = await supa.from(tableName).upsert(inserts, { onConflict: cfg.pk });
+    const { error } = await supa.from(physicalTable).upsert(inserts, { onConflict: cfg.pk });
     if (error) saveError = error;
   }
   const error = saveError;
@@ -760,7 +1012,8 @@ async function deleteRow(tableName, rowKey) {
     return;
   }
   // Delete by matching every row-key column, so composite keys (e.g. name+season) work.
-  let query = supa.from(tableName).delete();
+  const physicalTable = cfg.physicalTable || tableName;
+  let query = supa.from(physicalTable).delete();
   for (const col of getRowKeyCols(cfg)) {
     query = query.eq(col, row[col]);
   }
@@ -880,6 +1133,14 @@ async function commitCsvUpload(tableName) {
       const sanitised = sanitiseCsvValue(v);
       out[k] = sanitised === '' ? null : sanitised;
     }
+    // Backfill cfg.defaults (e.g. category=apparel) for rows whose CSV did
+    // not include the column. Lets the user upload a CSV that omits the
+    // category column and trust the active sub-tab to set it.
+    if (cfg.defaults) {
+      for (const [k, v] of Object.entries(cfg.defaults)) {
+        if (out[k] === undefined || out[k] === null || out[k] === '') out[k] = v;
+      }
+    }
     return out;
   });
 
@@ -887,11 +1148,12 @@ async function commitCsvUpload(tableName) {
   toast(`Upserting ${clean.length} rows...`, 'info');
 
   // Chunk to avoid payload limits (1000 per batch)
+  const physicalTable = cfg.physicalTable || tableName;
   const chunkSize = 500;
   let upserted = 0;
   for (let i = 0; i < clean.length; i += chunkSize) {
     const chunk = clean.slice(i, i + chunkSize);
-    const { error } = await supa.from(tableName).upsert(chunk, { onConflict: cfg.pk });
+    const { error } = await supa.from(physicalTable).upsert(chunk, { onConflict: cfg.pk });
     if (error) {
       toast(`Upsert failed at row ${i}. Please check your data and try again.`, 'error');
       return;
@@ -1550,3 +1812,18 @@ document.addEventListener('error', function(e) {
     e.target.parentElement.replaceChild(placeholder, e.target);
   }
 }, true);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHARED API for admin-footwear.js (and any future per-domain admin script).
+// admin-footwear.js is loaded after admin.js and reads from window.curate
+// rather than redeclaring its own Supabase client and helper functions.
+// ═══════════════════════════════════════════════════════════════════════════════
+window.curate = {
+  supa,
+  toast,
+  openModal,
+  closeModal,
+  escapeHtml,
+  escapeAttr,
+  escapeJs,
+};

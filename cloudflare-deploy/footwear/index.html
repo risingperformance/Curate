@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src  'self' https://cdn.jsdelivr.net;
+  style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src    https://fonts.gstatic.com;
+  img-src     'self' https://mlwzpgtdgfaczgxipbsq.supabase.co data:;
+  media-src   'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  object-src  'none';
+  base-uri    'self';
+  form-action 'self';
+">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>FootJoy Curate AW27 Footwear</title>
+
+<!--
+  Customer-facing footwear prebook form (AW27).
+  Auth and draft patterns mirror the apparel form (../index.html). The
+  shared Supabase client config lives one directory up. Section 4 of the
+  AW27 footwear brief.
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js" integrity="sha384-Y1tzkgTMv0NgNIkhIaJiI9rqNrOLfosToPr6Bzp4XVIOvF1BUd7mNlUVPpo6G8lL" crossorigin="anonymous"></script>
+<script src="../supabase-init.js"></script>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="templates/styles.css">
+</head>
+<body>
+
+<!-- Login + season picking live at the root /index.html. The footwear form
+     redirects unauthenticated users back there. Inline display:none beats
+     the legacy #login-screen CSS rule that sets position:fixed and a navy
+     background; we just need an empty element so getElementById doesn't
+     return null in legacy code paths. -->
+<div id="login-screen" style="display:none"></div>
+
+<!-- ── HEADER (revealed after auth) ── -->
+<header id="app-header" class="header" hidden>
+  <div class="header-inner">
+    <div class="fj-logo">
+      <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" class="fj-logo-img">
+    </div>
+    <div class="header-title">
+      <h1>Footwear Prebook Order Form</h1>
+    </div>
+    <div class="header-actions">
+      <span id="header-user" class="header-user"></span>
+      <button id="signout-btn" class="btn-header-link" type="button">Sign out</button>
+      <span class="header-curate-mark" aria-hidden="true">
+        <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
+      </span>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN: one view is mounted at a time ── -->
+<main id="app-main" hidden>
+  <section id="view-questionnaire" class="view"></section>
+  <section id="view-reorder" class="view" hidden></section>
+  <section id="view-deck" class="view" hidden></section>
+  <section id="view-catalogue" class="view" hidden></section>
+  <section id="view-summary" class="view" hidden></section>
+</main>
+
+<!--
+  Persistent fixed footer that hugs the bottom of the viewport during
+  the deck and catalogue views (mirrors the apparel form pattern). Cart
+  state, fullscreen toggle, save, and review live here. Hidden on the
+  questionnaire / reorder / summary views.
+-->
+<footer id="fw-app-footer" class="cart-summary" hidden></footer>
+
+<!-- ── TOAST CONTAINER ── -->
+<div id="toast-container"></div>
+
+<!--
+  Scripts load in dependency order:
+    cart.js            - cart state, picker, review modal, submit
+    slide-renderer.js  - registry: register(template_key, render); renderSlide(...)
+    templates/*.js     - each template registers itself
+    questionnaire.js   - questionnaire view (Phase C1)
+    reorder.js         - reorder view (Phase C2)
+    deck.js            - deck view (Phase C3)
+    catalogue.js       - full footwear catalogue (post-deck)
+    summary.js         - customer review summary
+    app.js             - controller; reads from all of the above (loaded last)
+-->
+<script src="cart.js"></script>
+<script src="slide-renderer.js"></script>
+<script src="slide-product-strip.js"></script>
+<script src="templates/hero_full_bleed.js"></script>
+<script src="templates/video_focus.js"></script>
+<script src="templates/tabbed_feature_showcase.js"></script>
+<script src="templates/split_story.js"></script>
+<script src="templates/heading_with_media.js"></script>
+<script src="templates/three_button_swap.js"></script>
+<script src="templates/four_button_swap.js"></script>
+<script src="templates/title_page.js"></script>
+<script src="questionnaire.js"></script>
+<script src="reorder.js"></script>
+<script src="deck.js"></script>
+<script src="catalogue.js"></script>
+<script src="summary.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

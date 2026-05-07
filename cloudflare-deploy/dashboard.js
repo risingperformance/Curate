@@ -105,7 +105,10 @@ async function loadAll() {
   const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes] = await Promise.all([
     supa.from('orders').select('*').order('order_date', { ascending: false }),
     supa.from('order_lines').select('*'),
-    supa.from('sales_targets').select('*'),
+    // Apparel-only here. After AW27 footwear launches the dashboard will
+    // need to surface footwear targets too; until then keep current
+    // behaviour by filtering on category.
+    supa.from('sales_targets').select('*').eq('category', 'apparel'),
     supa.from('customers').select('*'),
     supa.from('draft_orders').select('*').order('created_at', { ascending: false }),
     supa.from('customer_season_history').select('*'),
@@ -914,7 +917,7 @@ function renderDrafts() {
       ? '<span class="status-badge status-expired">Expired</span>'
       : '<span class="status-badge status-draft">Active</span>';
 
-    const draftUrl = `index.html#draft=${encodeURIComponent(d.token)}&from=dashboard`;
+    const draftUrl = `apparel/index.html#draft=${encodeURIComponent(d.token)}&from=dashboard`;
 
     tbody.innerHTML += `
       <tr id="draft-row-${d.token}">
@@ -996,9 +999,10 @@ async function saveTargets() {
   const rows = allReps.map(rep => ({
     name: rep,
     target: parseFloat(document.getElementById('target-' + rep.replace(/\s+/g,'_')).value) || 0,
-    season: 'AW27'
+    season: 'AW27',
+    category: 'apparel',
   }));
-  const { error } = await supa.from('sales_targets').upsert(rows, { onConflict: 'name,season' });
+  const { error } = await supa.from('sales_targets').upsert(rows, { onConflict: 'name,season,category' });
   if (error) {
     document.getElementById('target-save-status').textContent = '✗ Could not save targets. Please try again.';
   } else {

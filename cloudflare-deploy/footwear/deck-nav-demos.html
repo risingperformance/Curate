@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FootJoy Curate - Deck navigation demos</title>
+
+<!--
+  Seven mock-ups of how the slide navigation + cart footer can work
+  during the deck step. Same three sample slides in each design so the
+  comparison is apples to apples; only the chrome changes. Use the tab
+  bar at the top to flip between options. Prev / next, dot click, and
+  thumbnail click are all wired so each demo is interactive.
+
+  This file is standalone -- it does not import the production deck
+  CSS so the prototypes remain a sandbox for layout exploration.
+-->
+
+<link rel="stylesheet" href="styles.css">
+
+<style>
+  body {
+    background: #f3f4f6;
+    color: var(--fj-black);
+    font-family: 'Barlow', sans-serif;
+  }
+
+  /* ─── Demo chrome ──────────────────────────────────────────────────── */
+  .demo-page-header {
+    background: #000;
+    color: #fff;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
+  }
+  .demo-page-header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 600;
+  }
+  .demo-page-header-eyebrow {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 4px; text-transform: uppercase;
+    color: var(--fj-gold);
+    margin-bottom: 4px;
+  }
+  .demo-page-header-meta {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+  }
+
+  .demo-page-shell {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 24px 28px 64px;
+  }
+  .demo-tabs {
+    display: flex; flex-wrap: wrap;
+    gap: 0;
+    background: #fff;
+    border: 1px solid var(--fj-border);
+    border-radius: var(--radius);
+    margin-bottom: 22px;
+    box-shadow: var(--fj-card-shadow);
+    overflow: hidden;
+  }
+  .demo-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 14px 12px;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--fj-mid);
+    border-bottom: 3px solid transparent;
+    text-align: center;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .demo-tab:hover { color: var(--fj-navy); background: var(--fj-light); }
+  .demo-tab.active {
+    color: var(--fj-navy);
+    background: var(--fj-light);
+    border-bottom-color: var(--fj-navy);
+  }
+  .demo-tab-num {
+    display: block;
+    font-size: 9px; font-weight: 500;
+    color: var(--fj-mid); margin-bottom: 2px;
+    letter-spacing: 1.2px;
+  }
+  .demo-tab.active .demo-tab-num { color: var(--fj-gold); }
+
+  .demo-blurb {
+    background: #fff;
+    border: 1px solid var(--fj-border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--fj-black);
+  }
+  .demo-blurb b {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--fj-gold);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .demo-blurb-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 22px;
+  }
+  .demo-blurb-bullets {
+    font-size: 12.5px;
+    color: var(--fj-mid);
+    line-height: 1.6;
+    border-left: 1px solid var(--fj-border);
+    padding-left: 18px;
+  }
+  .demo-blurb-bullets ul { margin: 0; padding-left: 18px; }
+  .demo-blurb-bullets li { margin-bottom: 4px; }
+
+  /* ─── Stage frame: shared by every design ─────────────────────────── */
+  .stage-frame {
+    background: #fff;
+    border: 1px solid var(--fj-border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--fj-card-shadow);
+    height: calc(100vh - 360px);
+    min-height: 540px;
+    position: relative;
+  }
+
+  /* The deck-style structure used inside each variant. The actual look
+     is overridden per .design-N below. */
+  .deck {
+    position: relative;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    background: var(--fj-light);
+  }
+  .deck-row {
+    position: relative;
+    flex: 1 1 auto;
+    display: flex; align-items: stretch;
+    min-height: 0;
+  }
+  .deck-stage {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+  }
+  .deck-slide {
+    position: absolute; inset: 0;
+    display: flex; align-items: flex-end;
+    overflow: hidden;
+  }
+  .deck-slide img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+  .deck-slide-overlay {
+    position: relative;
+    width: 100%;
+    padding: 32px 40px;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 70%);
+    color: #fff;
+  }
+  .deck-slide-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(26px, 4vw, 50px);
+    font-weight: 600;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  .deck-slide-sub {
+    font-family: 'Barlow', sans-serif;
+    font-size: clamp(14px, 1.2vw, 16px);
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .deck-position {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 1.2px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    z-index: 5;
+  }
+
+  /* Default side nav buttons. Each design tweaks size, position, opacity. */
+  .deck-nav {
+    flex: 0 0 64px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    transition: background 0.15s ease, opacity 0.2s ease, transform 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .deck-nav:hover { background: rgba(0,0,0,0.75); }
+  .deck-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Default footer (cart-bar style) */
+  .deck-footer {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 12px;
+    background: #fff;
+    border-top: 1px solid var(--fj-border);
+    padding: 12px 18px;
+  }
+  .deck-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 32px; height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--fj-gold);
+    color: var(--fj-navy);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 700;
+  }
+  .deck-label { flex: 1; font-size: 13px; color: var(--fj-mid); }
+  .btn-share, .btn-review, .btn-prev-footer, .btn-next-footer {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  }
+  .btn-share { background: #fff; border: 1px solid var(--fj-border); color: var(--fj-black); }
+  .btn-share:hover { background: var(--fj-light); }
+  .btn-review { background: var(--fj-navy); color: #fff; border: none; }
+  .btn-review:hover { background: #000; }
+  .btn-review:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-prev-footer, .btn-next-footer {
+    background: #fff; border: 1px solid var(--fj-border); color: var(--fj-black);
+  }
+  .btn-prev-footer:hover, .btn-next-footer:hover { background: var(--fj-light); }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 1 - Baseline: side arrows + chunky cart bar (current state)
+     ─────────────────────────────────────────────────────────────────── */
+  .design-1 .deck-row { gap: 0; }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 2 - Footer arrows: prev/next live in the footer; slide goes
+     edge-to-edge horizontally
+     ─────────────────────────────────────────────────────────────────── */
+  .design-2 .deck-row .deck-nav { display: none; }
+  .design-2 .deck-footer { gap: 8px; }
+  .design-2 .btn-prev-footer, .design-2 .btn-next-footer {
+    width: 40px; height: 40px;
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 3 - Slim footer: hairline bar, just essentials. Side arrows
+     stay but smaller and gold-accent.
+     ─────────────────────────────────────────────────────────────────── */
+  .design-3 .deck-nav {
+    flex: 0 0 44px;
+    background: rgba(0,0,0,0.35);
+  }
+  .design-3 .deck-footer {
+    padding: 6px 14px;
+    background: var(--fj-light);
+    border-top: 1px solid var(--fj-border);
+  }
+  .design-3 .deck-count { min-width: 26px; height: 26px; font-size: 12px; padding: 0 8px; }
+  .design-3 .deck-label { font-size: 12px; }
+  .design-3 .btn-share, .design-3 .btn-review { padding: 6px 12px; font-size: 10px; }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 4 - Full bleed + corner pill cart: slide fills the entire
+     stage. Cart shrinks to a floating pill top-right.
+     ─────────────────────────────────────────────────────────────────── */
+  .design-4 .deck-footer { display: none; }
+  .design-4 .deck-row .deck-nav {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.85);
+    color: var(--fj-navy);
+    font-size: 20px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    flex: 0 0 auto;
+  }
+  .design-4 .deck-row .deck-nav.deck-nav-prev { left: 16px; }
+  .design-4 .deck-row .deck-nav.deck-nav-next { right: 16px; left: auto; }
+  .design-4 .deck-row .deck-nav:hover {
+    background: #fff;
+    transform: translateY(-50%) scale(1.05);
+  }
+  .design-4 .corner-pill {
+    position: absolute;
+    top: 14px; left: 14px;
+    z-index: 6;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    border-radius: 999px;
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1.4px; text-transform: uppercase;
+    transition: background 0.15s ease;
+  }
+  .design-4 .corner-pill:hover { background: rgba(0,0,0,0.85); }
+  .design-4 .corner-pill .corner-count {
+    background: var(--fj-gold);
+    color: var(--fj-navy);
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    padding: 1px 7px;
+  }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 5 - Auto-hiding chrome: side arrows + footer fade out after
+     2.5s of no interaction. Move the cursor / tap to bring them back.
+     ─────────────────────────────────────────────────────────────────── */
+  .design-5 .deck-nav,
+  .design-5 .deck-footer {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .design-5.idle .deck-row .deck-nav { opacity: 0; pointer-events: none; }
+  .design-5.idle .deck-footer        { opacity: 0; transform: translateY(100%); pointer-events: none; }
+  .design-5 .idle-hint {
+    position: absolute;
+    top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 5;
+  }
+  .design-5.idle .idle-hint { opacity: 1; }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 6 - Dot navigation: clickable position dots on top of the
+     slide; slim footer with just count + Review order.
+     ─────────────────────────────────────────────────────────────────── */
+  .design-6 .deck-row .deck-nav { display: none; }
+  .design-6 .deck-position { display: none; }
+  .design-6 .nav-dots {
+    position: absolute;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px;
+    background: rgba(0,0,0,0.45);
+    padding: 8px 14px;
+    border-radius: 999px;
+    z-index: 5;
+  }
+  .design-6 .nav-dot {
+    width: 28px; height: 4px;
+    background: rgba(255,255,255,0.4);
+    border: none; padding: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, width 0.15s ease;
+  }
+  .design-6 .nav-dot:hover { background: rgba(255,255,255,0.7); }
+  .design-6 .nav-dot.active { background: #fff; width: 40px; }
+  .design-6 .deck-footer {
+    padding: 8px 14px;
+    background: var(--fj-light);
+  }
+
+  /* ────────────────────────────────────────────────────────────────────
+     Design 7 - Thumbnail filmstrip: footer becomes a horizontal strip
+     of slide thumbs. Click a thumb to jump. Cart count pinned top-right
+     of the slide.
+     ─────────────────────────────────────────────────────────────────── */
+  .design-7 .deck-row .deck-nav {
+    width: 40px; flex: 0 0 40px;
+    background: rgba(0,0,0,0.35);
+    font-size: 16px;
+  }
+  .design-7 .deck-footer {
+    padding: 0;
+    background: #fff;
+    border-top: 1px solid var(--fj-border);
+    height: 92px;
+    overflow: hidden;
+  }
+  .design-7 .filmstrip {
+    display: flex; align-items: center; gap: 8px;
+    height: 100%;
+    padding: 8px 14px;
+    overflow-x: auto;
+  }
+  .design-7 .filmstrip-thumb {
+    flex: 0 0 auto;
+    width: 110px; height: 70px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-size: cover; background-position: center;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .design-7 .filmstrip-thumb:hover { transform: translateY(-2px); }
+  .design-7 .filmstrip-thumb.active { border-color: var(--fj-gold); }
+  .design-7 .filmstrip-thumb-label {
+    position: absolute;
+    left: 4px; bottom: 4px;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .design-7 .corner-cart {
+    position: absolute;
+    top: 14px; left: 14px;
+    z-index: 5;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    background: #fff;
+    border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--fj-black);
+  }
+  .design-7 .corner-cart .corner-count {
+    background: var(--fj-gold);
+    color: var(--fj-navy);
+    border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    padding: 1px 7px;
+  }
+  .design-7 .deck-position { display: none; }
+
+  /* Hide design-specific extras when not active */
+  .deck:not(.design-4) .corner-pill { display: none; }
+  .deck:not(.design-5) .idle-hint   { display: none; }
+  .deck:not(.design-6) .nav-dots    { display: none; }
+  .deck:not(.design-7) .corner-cart { display: none; }
+  .deck:not(.design-7) .filmstrip   { display: none; }
+</style>
+</head>
+<body>
+
+<header class="demo-page-header">
+  <div>
+    <div class="demo-page-header-eyebrow">FootJoy Curate</div>
+    <div class="demo-page-header-title">Deck navigation - 7 design demos</div>
+  </div>
+  <div class="demo-page-header-meta">Click the tabs to compare</div>
+</header>
+
+<div class="demo-page-shell">
+
+  <nav class="demo-tabs" id="demo-tabs"></nav>
+
+  <div class="demo-blurb" id="demo-blurb"></div>
+
+  <div class="stage-frame">
+    <div class="deck design-1" id="demo-deck">
+      <div class="deck-row">
+        <button class="deck-nav deck-nav-prev" id="prev-btn" aria-label="Previous">&larr;</button>
+        <div class="deck-stage" id="deck-stage">
+          <div class="deck-slide deck-slide-active">
+            <img id="slide-img" src="" alt="">
+            <div class="deck-slide-overlay">
+              <div class="deck-slide-title" id="slide-title"></div>
+              <div class="deck-slide-sub" id="slide-sub"></div>
+            </div>
+          </div>
+          <span class="deck-position" id="deck-position">1 / 3</span>
+          <button class="corner-pill"><span class="corner-count">0</span><span>Review order</span></button>
+          <button class="corner-cart"><span class="corner-count">0</span><span>Cart</span></button>
+          <div class="idle-hint">Move the cursor to wake the controls</div>
+          <div class="nav-dots" id="nav-dots"></div>
+        </div>
+        <button class="deck-nav deck-nav-next" id="next-btn" aria-label="Next">&rarr;</button>
+      </div>
+      <div class="deck-footer" id="deck-footer">
+        <button class="btn-prev-footer" id="prev-btn-footer" aria-label="Previous">&larr;</button>
+        <span class="deck-count" id="deck-count">0</span>
+        <span class="deck-label">No items yet</span>
+        <button class="btn-share">Share with customer</button>
+        <button class="btn-review" disabled>Review order</button>
+        <button class="btn-next-footer" id="next-btn-footer" aria-label="Next">&rarr;</button>
+        <div class="filmstrip" id="filmstrip"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var SAMPLE_SLIDES = [
+    {
+      title: 'AW27 Footwear',
+      sub: 'Engineered for the next round.',
+      img: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&w=1920&q=80'
+    },
+    {
+      title: 'Pro/SLX Carbon',
+      sub: 'Tour-grade traction. All-day comfort.',
+      img: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?auto=format&fit=crop&w=1920&q=80'
+    },
+    {
+      title: 'Premiere Series',
+      sub: 'Heritage silhouettes, modern cushion.',
+      img: 'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?auto=format&fit=crop&w=1920&q=80'
+    }
+  ];
+
+  var DESIGNS = [
+    {
+      key: 'design-1',
+      label: 'Baseline',
+      blurb: 'Current production layout. Two solid side arrows, slide sits inside a panel, cart bar runs full-width across the bottom.',
+      pros: ['Familiar pattern from apparel form', 'Clear call to action: Review order'],
+      cons: ['Cart bar eats vertical room', 'Side arrows feel utilitarian']
+    },
+    {
+      key: 'design-2',
+      label: 'Footer arrows',
+      blurb: 'Prev/next move into the footer next to the cart info. Slide stretches edge-to-edge horizontally so the image gets all the lateral space.',
+      pros: ['One control surface for everything', 'Slide reads wider on landscape screens'],
+      cons: ['Two-handed feel: navigate at bottom, look up top', 'Footer becomes busier']
+    },
+    {
+      key: 'design-3',
+      label: 'Slim footer',
+      blurb: 'Same shape as the baseline but the footer collapses to a hairline strip with smaller controls and side arrows are slimmer too. Reclaims about a third of the chrome height.',
+      pros: ['Quick win, minimal restructuring', 'Slide grows ~40px taller'],
+      cons: ['Smaller hit targets on touch', 'Cart info is less glanceable']
+    },
+    {
+      key: 'design-4',
+      label: 'Full bleed + corner pill',
+      blurb: 'Slide takes the entire stage. Cart shrinks to a glass pill anchored top-left of the slide. Round nav arrows float over the image so nothing competes for attention.',
+      pros: ['Most cinematic for hero / video slides', 'Cart count + review still always reachable'],
+      cons: ['Pill can clash with bright slide images', 'Customer may miss the review action']
+    },
+    {
+      key: 'design-5',
+      label: 'Auto-hide chrome',
+      blurb: 'After 2.5s of no cursor movement the side arrows and footer fade out so the slide goes full-screen. Touch / move to wake the controls back up. Hover the stage to test.',
+      pros: ['Cleanest visual experience for presenting', 'Distinct from anything else in the form'],
+      cons: ['Hidden controls can confuse first-time users', 'Touchscreens need a tap to wake']
+    },
+    {
+      key: 'design-6',
+      label: 'Dot navigation',
+      blurb: 'No side arrows. A pill of position dots floats at the bottom of the slide; the active one elongates. Footer keeps just the cart count and Review order.',
+      pros: ['Modern carousel pattern, scales to any slide count', 'Lets the user jump multiple slides at once'],
+      cons: ['Dot row gets busy with 8+ slides', 'No visible left/right affordance']
+    },
+    {
+      key: 'design-7',
+      label: 'Thumbnail filmstrip',
+      blurb: 'Footer becomes a horizontal strip of slide thumbnails. The active thumb is gold-bordered. Cart shrinks to a floating chip top-left so the strip can use the full width.',
+      pros: ['Random-access navigation, great for long decks', 'Visual context for what is coming next'],
+      cons: ['Tallest footer of the seven', 'Thumbs need rendering effort + caching']
+    }
+  ];
+
+  var deck      = document.getElementById('demo-deck');
+  var tabsBar   = document.getElementById('demo-tabs');
+  var blurbBar  = document.getElementById('demo-blurb');
+  var prevBtn   = document.getElementById('prev-btn');
+  var nextBtn   = document.getElementById('next-btn');
+  var prevBtnF  = document.getElementById('prev-btn-footer');
+  var nextBtnF  = document.getElementById('next-btn-footer');
+  var slideImg  = document.getElementById('slide-img');
+  var slideTitle = document.getElementById('slide-title');
+  var slideSub  = document.getElementById('slide-sub');
+  var posEl     = document.getElementById('deck-position');
+  var dotsEl    = document.getElementById('nav-dots');
+  var stripEl   = document.getElementById('filmstrip');
+
+  var activeDesign = 0;
+  var activeSlide  = 0;
+  var idleTimer = null;
+
+  function paintTabs() {
+    tabsBar.innerHTML = DESIGNS.map(function (d, i) {
+      return '<button class="demo-tab' + (i === activeDesign ? ' active' : '') + '" data-idx="' + i + '">'
+        + '<span class="demo-tab-num">Design ' + (i + 1) + '</span>'
+        + d.label
+        + '</button>';
+    }).join('');
+    tabsBar.querySelectorAll('[data-idx]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.dataset.idx, 10);
+        if (isNaN(i) || i === activeDesign) return;
+        activeDesign = i;
+        applyDesign();
+      });
+    });
+  }
+
+  function applyDesign() {
+    paintTabs();
+    var d = DESIGNS[activeDesign];
+    deck.className = 'deck ' + d.key;
+    blurbBar.innerHTML = ''
+      + '<div class="demo-blurb-grid">'
+      +   '<div><b>' + 'Design ' + (activeDesign + 1) + ' &middot; ' + d.label + '</b>' + d.blurb + '</div>'
+      +   '<div class="demo-blurb-bullets">'
+      +     '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--fj-gold);margin-bottom:4px;">Pros / Cons</div>'
+      +     '<ul>' + d.pros.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>'
+      +     '<ul style="margin-top:6px;color:#9aa0a6;">' + d.cons.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>'
+      +   '</div>'
+      + '</div>';
+
+    // Reset auto-hide state when switching designs
+    deck.classList.remove('idle');
+    clearTimeout(idleTimer);
+    if (d.key === 'design-5') startIdleTimer();
+
+    paintSlide();
+  }
+
+  function paintSlide() {
+    var s = SAMPLE_SLIDES[activeSlide];
+    slideImg.src = s.img;
+    slideTitle.textContent = s.title;
+    slideSub.textContent = s.sub;
+    posEl.textContent = (activeSlide + 1) + ' / ' + SAMPLE_SLIDES.length;
+
+    // Dots (design 6)
+    dotsEl.innerHTML = SAMPLE_SLIDES.map(function (_, i) {
+      return '<button class="nav-dot' + (i === activeSlide ? ' active' : '') + '" data-dot="' + i + '" aria-label="Slide ' + (i + 1) + '"></button>';
+    }).join('');
+    dotsEl.querySelectorAll('[data-dot]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        activeSlide = parseInt(b.dataset.dot, 10) || 0;
+        paintSlide();
+      });
+    });
+
+    // Filmstrip (design 7)
+    stripEl.innerHTML = SAMPLE_SLIDES.map(function (sl, i) {
+      return '<div class="filmstrip-thumb' + (i === activeSlide ? ' active' : '') + '"'
+        + ' style="background-image:url(' + sl.img + ');" data-thumb="' + i + '">'
+        + '<span class="filmstrip-thumb-label">Slide ' + (i + 1) + '</span>'
+        + '</div>';
+    }).join('');
+    stripEl.querySelectorAll('[data-thumb]').forEach(function (t) {
+      t.addEventListener('click', function () {
+        activeSlide = parseInt(t.dataset.thumb, 10) || 0;
+        paintSlide();
+      });
+    });
+
+    prevBtn.disabled  = activeSlide === 0;
+    prevBtnF.disabled = activeSlide === 0;
+    nextBtn.disabled  = activeSlide === SAMPLE_SLIDES.length - 1;
+    nextBtnF.disabled = activeSlide === SAMPLE_SLIDES.length - 1;
+  }
+
+  function goPrev() {
+    if (activeSlide > 0) { activeSlide--; paintSlide(); }
+    bumpIdle();
+  }
+  function goNext() {
+    if (activeSlide < SAMPLE_SLIDES.length - 1) { activeSlide++; paintSlide(); }
+    bumpIdle();
+  }
+  prevBtn.addEventListener('click', goPrev);
+  nextBtn.addEventListener('click', goNext);
+  prevBtnF.addEventListener('click', goPrev);
+  nextBtnF.addEventListener('click', goNext);
+
+  // Auto-hide design: bump the idle timer on cursor move / touch
+  function startIdleTimer() {
+    bumpIdle();
+  }
+  function bumpIdle() {
+    if (DESIGNS[activeDesign].key !== 'design-5') return;
+    deck.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () { deck.classList.add('idle'); }, 2500);
+  }
+  ['mousemove', 'click', 'touchstart', 'keydown'].forEach(function (ev) {
+    deck.addEventListener(ev, bumpIdle, { passive: true });
+  });
+
+  applyDesign();
+})();
+</script>
+
+</body>
+</html>

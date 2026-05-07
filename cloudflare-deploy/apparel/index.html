@@ -20,7 +20,7 @@
 <title>FootJoy Curate</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.103.3/dist/umd/supabase.min.js" integrity="sha384-Y1tzkgTMv0NgNIkhIaJiI9rqNrOLfosToPr6Bzp4XVIOvF1BUd7mNlUVPpo6G8lL" crossorigin="anonymous"></script>
-<script src="supabase-init.js"></script>
+<script src="../supabase-init.js"></script>
 <!-- jspdf + html2canvas removed: now using window.print() for vector PDF output -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
@@ -2474,19 +2474,7 @@
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
-<div id="login-screen">
-  <img id="login-logo" src="" alt="FootJoy" />
-  <div id="login-title"></div>
-  <form id="login-form" autocomplete="on">
-    <input id="login-email" class="login-field" type="email" placeholder="Email address" autocomplete="email" required />
-    <input id="login-password" class="login-field" type="password" placeholder="Password" autocomplete="current-password" required />
-    <button id="login-btn" class="login-btn" type="submit">Sign In</button>
-    <a id="login-forgot" href="#" class="login-forgot">Forgot password?</a>
-  </form>
-  <div id="login-error"></div>
-</div>
-<!-- DRAFT LOADING SCREEN (shown instead of login when customer opens a draft link) -->
+<!-- DRAFT LOADING SCREEN (shown when a draft link is opened directly) -->
 <div id="draft-loading-screen" style="display:none">
   <img class="draft-loading-logo" src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate" />
   <div class="draft-loading-text">Loading your order...</div>
@@ -2494,31 +2482,243 @@
     <div class="draft-loading-bar-fill"></div>
   </div>
 </div>
+<!-- Login + season landing live at the root /index.html. The apparel form
+     redirects unauthenticated users to root. The placeholders below exist
+     only so getElementById lookups in legacy code paths don't return null;
+     inline display:none beats the legacy #login-screen / #season-landing
+     CSS rules that set position:fixed and a black background. -->
+<div id="login-screen" style="display:none"></div>
+<div id="season-landing" style="display:none"></div>
 
-<!-- SEASON LANDING PAGE -->
-<div id="season-landing">
-  <button id="btn-sign-out" data-action="signOut" class="sign-out-btn">Sign Out</button>
-  <img class="season-landing-logo" src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate" />
-  <div class="season-landing-title">Select a Season</div>
-  <div class="season-landing-subtitle">Choose a prebook to continue</div>
-  <div class="season-cards" id="season-cards-container"></div>
-
-  <!-- Booking Diary card (Option 4) -->
-  <div class="diary-card" id="diary-card">
-    <div class="diary-head">
-      <div class="diary-head-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      </div>
-      <div class="diary-head-text">
-        <div class="diary-head-title">Booking Diary</div>
-        <div class="diary-head-sub" id="diary-head-sub">Loading appointments…</div>
-      </div>
-      <a class="diary-head-cta" id="diary-head-cta" href="appointment-diary.html">Manage <span class="arrow">&rarr;</span></a>
+<!-- HEADER -->
+<header class="header" id="app-header" style="display:none">
+  <div class="header-inner">
+    <div class="fj-logo">
+      <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" style="height:36px; display:block;" />
     </div>
-    <ul class="diary-list" id="diary-list"></ul>
+    <div class="header-title">
+      <h1>Apparel Prebook Order Form</h1>
+    </div>
+    <div class="header-actions">
+      <button class="header-home-btn" data-action="handleExitToLanding" title="Back to season select">
+        <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate" />
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main" id="app-main" style="display:none">
+
+  <!-- ORDER INFO PANEL -->
+  <section class="order-info-panel">
+    <h2>Order Information
+      <span class="pricing-inline">
+        <span id="order-date-display" class="order-date-label"></span>
+        <select id="country-select" data-action="updatePricing">
+          <option value="AUD">AUD</option>
+          <option value="NZD">NZD</option>
+        </select>
+        <span class="global-cresting-wrap">
+          <span class="global-cresting-top">
+            <span class="global-cresting-label">Global Logo Embroidery</span>
+            <button id="btn-global-cresting" class="cresting-toggle" data-action="toggleGlobalCresting">Off</button>
+          </span>
+          <span class="global-cresting-settings" id="global-cresting-settings">
+            <span class="global-cresting-field">
+              <span class="cresting-label">Logo Option</span>
+              <button id="btn-global-logo-option" class="cresting-toggle subsection-logo-toggle"
+                      data-action="toggleGlobalLogoOption">Recommended</button>
+            </span>
+            <span class="global-cresting-field" id="global-position-wrap" style="display:none">
+              <span class="cresting-label">Position</span>
+              <select class="cresting-select" id="global-position" data-action="setGlobalCrestingDefault" data-field="position">
+                <option value="Left Chest">Left Chest</option>
+                <option value="Right Chest">Right Chest</option>
+                <option value="Left Sleeve">Left Sleeve</option>
+                <option value="Right Sleeve">Right Sleeve</option>
+              </select>
+            </span>
+            <span class="global-cresting-field" id="global-colour-wrap" style="display:none">
+              <span class="cresting-label">Colour</span>
+              <select class="cresting-select" id="global-colour" data-action="setGlobalCrestingDefault" data-field="colour">
+                <option value="Match FJ (1 colour)">Match FJ (1 colour)</option>
+                <option value="Colour Co-ordinated">Colour Co-ordinated</option>
+                <option value="Full Colour">Full Colour</option>
+                <option value="Tonal">Tonal</option>
+              </select>
+            </span>
+            <span class="global-cresting-field" id="global-instructions-wrap" style="display:none">
+              <span class="cresting-label">Special Instructions</span>
+              <input type="text" class="cresting-instructions" id="global-instructions" placeholder="Special instructions..."
+                     data-action="setGlobalCrestingDefault" data-field="specialInstructions"
+                     style="width:160px; height:auto; padding:4px 7px;" />
+            </span>
+            <button class="btn-apply-cresting" data-action="applyGlobalCresting">Apply to All</button>
+          </span>
+        </span>
+      </span>
+    </h2>
+    <input type="hidden" id="order-date" />
+
+    <div class="field-group ac-wrap">
+      <label>Account</label>
+      <input type="text" id="account" placeholder="Search customers…" autocomplete="off" spellcheck="false" />
+      <ul id="ac-dropdown" class="ac-dropdown"></ul>
+    </div>
+
+    <div class="field-group">
+      <label>Account Manager</label>
+      <input type="text" id="account-manager" placeholder="Auto-filled" readonly />
+    </div>
+
+    <div class="field-group" style="grid-column: span 2;">
+      <label>Order Comments</label>
+      <input type="text" id="order-comments" placeholder="General notes…" />
+    </div>
+  </section>
+
+
+  <!-- TAB BAR -->
+  <div class="tab-bar" id="tab-bar"></div>
+
+  <!-- MY SELECTIONS PANEL -->
+  <div class="my-selections-panel" id="my-selections-panel"></div>
+
+  <!-- COLLECTIONS CONTAINER -->
+  <div class="collections-container" id="collections-container"></div>
+
+</main>
+
+<!-- FOOTER -->
+<!-- CUSTOMER INSIGHT POPUP -->
+<div class="ci-overlay" id="ci-overlay" data-action="closeCiOverlaySelf">
+  <div class="ci-card">
+    <button class="ci-close" data-action="closeCiOverlay">&times;</button>
+    <div class="ci-header">
+      <div class="ci-header-text">
+        <div class="ci-customer-name" id="ci-name">—</div>
+        <div class="ci-group-label" id="ci-group"></div>
+      </div>
+      <img class="ci-group-logo" id="ci-logo" src="" alt="" style="display:none" />
+    </div>
+    <div class="ci-body">
+      <div class="ci-comparison">
+        <div>
+          <div class="ci-col-title">Prior Season</div>
+          <div class="ci-big-number" id="ci-prior-total">0</div>
+          <ul class="ci-breakdown" id="ci-prior-breakdown"></ul>
+        </div>
+        <div>
+          <div class="ci-col-title">Current Order</div>
+          <div class="ci-big-number" id="ci-current-total">0</div>
+          <ul class="ci-breakdown" id="ci-current-breakdown"></ul>
+        </div>
+      </div>
+      <!-- Partner tier progress — only shown for Green Grass / Driving Range -->
+      <div class="ci-partner-section" id="ci-partner-section" style="display:none">
+        <div class="ci-partner-title">Apparel Partner Program</div>
+        <div class="ci-tier-badge" id="ci-tier-badge"></div>
+        <div class="ci-tier-bar" id="ci-tier-bar">
+          <div class="ci-tier-segment" id="ci-seg-0"></div>
+          <div class="ci-tier-segment" id="ci-seg-1"></div>
+          <div class="ci-tier-segment" id="ci-seg-2"></div>
+          <div class="ci-tier-segment" id="ci-seg-3"></div>
+        </div>
+        <div class="ci-tier-labels">
+          <div class="ci-tier-label" id="ci-lbl-0">Non<br>Partner<br><span style="color:#aaa;font-weight:400">0–11</span></div>
+          <div class="ci-tier-label" id="ci-lbl-1">Pre Book<br>Partner<br><span style="color:#aaa;font-weight:400">12–99</span></div>
+          <div class="ci-tier-label" id="ci-lbl-2">Apparel<br>Partner<br><span style="color:#aaa;font-weight:400">100–199</span></div>
+          <div class="ci-tier-label" id="ci-lbl-3">Premium<br>Apparel<br><span style="color:#aaa;font-weight:400">200+</span></div>
+        </div>
+        <div class="ci-tier-next" id="ci-tier-next"></div>
+      </div>
+    </div>
   </div>
 </div>
 
+<footer class="footer" id="app-footer" style="display:none">
+  <div class="footer-left" data-action="showCustomerInsight" style="cursor:pointer">
+    <div class="footer-stat">
+      <div class="footer-stat-label">Customer Name</div>
+      <div class="footer-stat-value" id="footer-customer-name" style="font-size:14px">—</div>
+    </div>
+  </div>
+  <span id="grand-units" style="display:none">0</span>
+  <span id="grand-total" style="display:none">$0</span>
+  <div class="footer-actions">
+    <button class="btn btn-outline btn-fs" data-action="toggleFullScreen" id="btn-fullscreen" title="Toggle fullscreen">⛶</button>
+    <button class="btn btn-outline" data-action="clearAll" id="btn-clear-all">↺ Clear</button>
+    <button class="btn btn-outline" data-action="saveDraftInPlace">💾 Save</button>
+    <button class="btn btn-outline" data-action="openShareDraftModal" id="btn-share-draft">⤴ Share</button>
+    <button class="btn-submit" data-action="showReviewModal" id="btn-submit">✓ Review Order</button>
+  </div>
+</footer>
+
+<!-- REVIEW ORDER MODAL -->
+<div class="modal-overlay" id="review-modal">
+  <div class="modal-content modal-content-review">
+    <div id="review-modal-inner"></div>
+    <div class="review-modal-footer">
+      <button class="btn btn-outline-dark" data-action="closeModal" data-modal="review-modal">← Back</button>
+      <div class="review-modal-footer-right">
+        <button class="btn btn-outline-dark" data-action="printReview">⎙ Print / Save as PDF</button>
+        <button class="btn-submit" id="btn-confirm-submit" data-action="confirmSubmit">✓ Confirm &amp; Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<!-- DRAFT BANNER -->
+<div id="draft-banner">
+  📋 You are viewing a shared draft order. Changes will not be saved automatically.
+  <button id="draft-banner-close" data-action="closeDraftBanner" title="Dismiss">×</button>
+</div>
+
+<!-- SHARE DRAFT MODAL -->
+<div class="modal-overlay" id="share-draft-modal">
+  <div class="modal-content" style="max-width:460px;">
+    <h2 class="share-draft-modal-title">Share Draft Prebook Order with Customer</h2>
+    <div class="share-draft-form">
+      <div class="share-draft-field">
+        <label class="share-draft-label" for="share-draft-email">Customer Email</label>
+        <input class="share-draft-input" id="share-draft-email" type="email" placeholder="customer@example.com" />
+      </div>
+      <div id="share-draft-error" class="share-draft-error"></div>
+      <div class="share-draft-actions">
+        <button class="btn btn-ghost" data-action="closeModal" data-modal="share-draft-modal">Cancel</button>
+        <button class="btn-submit" id="btn-send-draft" data-action="sendDraftLink">Send Draft Link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="success-modal">
+  <div class="success-popup">
+    <div class="success-popup-icon">✓</div>
+    <h2 class="success-popup-title">Order Submitted</h2>
+    <p class="success-popup-msg" id="success-message"></p>
+    <div class="success-popup-actions">
+      <button class="success-btn success-btn-primary" data-action="resetForm">+ New Order</button>
+      <button class="success-btn success-btn-secondary" data-action="useTemplate">⟳ Use as Template</button>
+      <button class="success-btn success-btn-ghost" data-action="closeModal" data-modal="success-modal">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="toast-notification" id="toast-notification"></div>
+
+<!-- Privacy footer (shown in customer draft mode only) -->
+<footer id="privacy-footer" style="display:none;text-align:center;padding:16px 20px 24px;font-size:11px;color:#6b7a99;line-height:1.5">
+  Your personal information is collected and handled in accordance with the
+  <a href="https://www.acushnetgolf.com.au/privacy-policy" target="_blank" rel="noopener" style="color:#1a3a6b;text-decoration:underline">Acushnet Privacy Policy</a>.
+  We only use your details to manage your prebook order. For questions, contact your FootJoy account manager.
+</footer>
+
+<!-- Print-only container: populated by generateCustomerPDF(), visible only during print -->
+<div id="print-container"></div>
 
 <script src="index-app.js"></script>
 </body>

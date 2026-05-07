@@ -1,0 +1,1977 @@
+/*
+  Footwear prebook (AW27) shared styles.
+  Brand tokens mirror the apparel form so the two domains feel unified.
+  Per-template CSS lives next to its template module under templates/styles/
+  (added in Phase C2 / C3).
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+:root {
+  --fj-black:    #111111;
+  --fj-navy:     #000000;
+  --fj-navy-dk:  #000000;
+  --fj-gold:     #c8a84b;
+  --fj-gold-lt:  #f5edda;
+  --fj-red:      #c0272d;
+  --fj-mid:      #6b7280;
+  --fj-light:    #f9fafb;
+  --fj-border:   #e5e7eb;
+  --fj-hover:    #f3f6ff;
+  --fj-green:    #166534;
+  --fj-card-shadow:        0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
+  --fj-card-shadow-hover:  0 4px 12px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.07);
+  --radius:      2px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background: #f3f4f6;
+  color: var(--fj-black);
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+[hidden] { display: none !important; }
+
+/* ─── LOGIN SCREEN ────────────────────────────────────────────────────── */
+
+#login-screen {
+  position: fixed; inset: 0;
+  background: var(--fj-navy);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.5s ease;
+}
+#login-screen.fade-out { opacity: 0; pointer-events: none; }
+
+.login-card {
+  text-align: center;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+}
+#login-logo { width: 180px; height: auto; margin-bottom: 28px; }
+.login-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: #fff; margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+.login-sub {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 500;
+  color: var(--fj-gold); margin-bottom: 28px;
+  letter-spacing: 4px;
+}
+#login-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.login-field {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  transition: border-color 0.15s ease;
+}
+.login-field::placeholder { color: rgba(255,255,255,0.4); }
+.login-field:focus { outline: none; border-color: var(--fj-gold); background: rgba(200,168,75,0.06); }
+
+.login-btn {
+  width: 100%;
+  margin-top: 6px; padding: 12px;
+  background: var(--fj-gold); color: var(--fj-navy);
+  border: none; border-radius: 8px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  cursor: pointer; transition: opacity 0.15s ease;
+}
+.login-btn:hover  { opacity: 0.9; }
+.login-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.login-forgot {
+  display: inline-block; margin-top: 14px;
+  font-size: 12px; color: rgba(255,255,255,0.5);
+  text-decoration: none; cursor: pointer;
+}
+.login-forgot:hover { color: rgba(255,255,255,0.9); }
+
+#login-error {
+  margin-top: 14px;
+  font-size: 12px; min-height: 18px;
+  color: #f08080;
+  transition: opacity 0.3s ease;
+}
+
+/* ─── HEADER (mirrors apparel index.html) ─────────────────────────────── */
+
+#app-header.header {
+  background: #000;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
+}
+.header-inner {
+  max-width: 1680px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 64px;
+}
+
+/* Left: FootJoy lockup */
+.fj-logo {
+  display: flex; align-items: center; gap: 14px;
+}
+.fj-logo-img {
+  height: 36px; width: auto; display: block;
+}
+
+/* Center: page title */
+.header-title { text-align: center; flex: 1; }
+.header-title h1 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 5px; text-transform: uppercase;
+  margin: 0;
+}
+
+/* Right: rep info, sign out, Curate mark (no click) */
+.header-actions { display: flex; align-items: center; gap: 14px; }
+.header-user {
+  font-size: 12px; color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.3px;
+}
+.btn-header-link {
+  background: transparent; border: none; cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 4px 6px;
+  transition: color 0.15s ease;
+}
+.btn-header-link:hover { color: #fff; }
+.header-curate-mark {
+  display: flex; align-items: center;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.header-curate-mark img { height: 22px; width: auto; display: block; }
+
+@media (max-width: 720px) {
+  .header-inner { padding: 0 16px; height: 56px; }
+  .header-title h1 { font-size: 11px; letter-spacing: 3px; }
+  .fj-logo-img { height: 28px; }
+  .header-curate-mark img { height: 18px; }
+  .header-user { display: none; }
+}
+
+/* ─── BUTTONS (shared) ─────────────────────────────────────────────────── */
+
+.btn {
+  padding: 10px 18px;
+  border-radius: 6px; border: none; cursor: pointer;
+  font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--fj-gold); color: var(--fj-navy); }
+.btn-primary:hover { opacity: 0.92; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-outline {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+}
+.btn-outline:hover { background: rgba(255,255,255,0.08); }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+
+/* ─── MAIN VIEW CONTAINERS ─────────────────────────────────────────────── */
+
+#app-main {
+  /*
+    No max-width on the main wrapper. The deck wants to fill the screen,
+    while the questionnaire and reorder are form-like and stay narrow.
+    Each view sets its own max-width below.
+  */
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+.view { width: 100%; }
+#view-questionnaire { max-width: 720px;             margin: 0 auto; }
+#view-reorder       { max-width: min(1580px, 100%); margin: 0 auto; }
+/* The deck has no max-width: it should fill the viewport edge-to-edge so
+   the 2:1 stage can scale up. The shell centres the 2:1 stage inside it. */
+#view-deck          { max-width: 100%;              margin: 0 auto; }
+
+/* Edge-to-edge deck: the deck is the only view that wants to ignore the
+   normal #app-main padding so the stage touches the header at the top
+   and the footer at the bottom. Other views (questionnaire, reorder,
+   catalogue, summary) keep the normal padding for readability. */
+#app-main:has(#view-deck:not([hidden])) {
+  padding: 0;
+}
+body.fw-footer-visible:has(#view-deck:not([hidden])) #app-main {
+  padding-bottom: 80px;            /* exactly footer height, no breathing gap */
+}
+
+/* ─── CUSTOMER PICKER (top of questionnaire) ──────────────────────────── */
+
+.qx-customer-section { margin-bottom: 28px; }
+.qx-customer-card {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  padding: 22px 22px 24px;
+  box-shadow: var(--fj-card-shadow);
+}
+.qx-customer-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--fj-gold);
+  margin-bottom: 4px;
+}
+.qx-customer-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px; font-weight: 700;
+  color: var(--fj-black);
+  letter-spacing: 0.2px;
+  margin-bottom: 14px;
+}
+.qx-customer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+}
+.qx-customer-field {
+  display: flex; flex-direction: column;
+  gap: 5px;
+  position: relative;
+  cursor: text;
+}
+.qx-customer-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--fj-mid);
+}
+.qx-customer-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--fj-border);
+  border-radius: 6px;
+  background: var(--fj-light);
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px; color: var(--fj-black);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.qx-customer-input:focus {
+  outline: none;
+  border-color: var(--fj-gold);
+  background: #fff;
+}
+.qx-customer-input-readonly {
+  cursor: default;
+  color: var(--fj-mid);
+}
+.qx-customer-meta {
+  font-size: 11.5px; color: var(--fj-mid);
+  margin-top: 2px;
+}
+
+.qx-customer-dropdown {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  margin-top: 4px;
+  list-style: none; padding: 4px 0; margin: 4px 0 0;
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 280px; overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+.qx-customer-dropdown.open { display: block; }
+.qx-customer-option {
+  padding: 9px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--fj-border);
+  transition: background 0.1s ease;
+}
+.qx-customer-option:last-child { border-bottom: none; }
+.qx-customer-option:hover { background: var(--fj-hover); }
+.qx-customer-option-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fj-black);
+  line-height: 1.2;
+}
+.qx-customer-option-sub {
+  font-size: 11.5px;
+  color: var(--fj-mid);
+  margin-top: 1px;
+}
+
+@media (max-width: 600px) {
+  .qx-customer-grid { grid-template-columns: 1fr; }
+  .qx-customer-card { padding: 18px 16px 20px; }
+}
+
+/* ─── QUESTIONNAIRE VIEW ───────────────────────────────────────────────── */
+
+.qx-intro { text-align: center; margin-bottom: 36px; }
+.qx-intro-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 600;
+  color: var(--fj-gold); letter-spacing: 4px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.qx-intro-title {
+  font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 600;
+  color: var(--fj-black); margin-bottom: 10px;
+}
+.qx-intro-body {
+  font-size: 14.5px; line-height: 1.55; color: var(--fj-mid);
+  max-width: 540px; margin: 0 auto;
+}
+
+.qx-list { display: flex; flex-direction: column; gap: 14px; }
+.qx-card {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  padding: 22px 22px 20px;
+  box-shadow: var(--fj-card-shadow);
+  transition: opacity 0.4s ease, transform 0.4s ease, box-shadow 0.2s ease;
+}
+.qx-card.qx-card-revealing { opacity: 0; transform: translateY(8px); }
+.qx-card.qx-card-revealed  { opacity: 1; transform: translateY(0); }
+.qx-card.qx-card-answered  { box-shadow: var(--fj-card-shadow); }
+.qx-card.qx-card-active    { box-shadow: var(--fj-card-shadow-hover); border-color: var(--fj-gold); }
+
+.qx-card-prompt {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700;
+  color: var(--fj-black); margin-bottom: 4px; letter-spacing: 0.2px;
+}
+.qx-card-meta {
+  font-size: 11px; color: var(--fj-mid); margin-bottom: 14px;
+  letter-spacing: 0.3px;
+}
+.qx-options { display: flex; flex-direction: column; gap: 8px; }
+.qx-option {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--fj-light);
+  border: 1.5px solid var(--fj-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  font-size: 14px;
+}
+.qx-option:hover { border-color: var(--fj-gold); background: var(--fj-gold-lt); }
+.qx-option-input { accent-color: var(--fj-gold); margin: 0; }
+.qx-option-label { flex: 1; }
+.qx-option.qx-option-selected {
+  border-color: var(--fj-gold);
+  background: var(--fj-gold-lt);
+}
+
+.qx-actions {
+  display: flex; justify-content: center; gap: 12px;
+  margin-top: 32px;
+}
+.qx-continue {
+  background: var(--fj-navy); color: #fff;
+  padding: 14px 36px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.qx-continue:disabled { opacity: 0.35; cursor: not-allowed; }
+.qx-continue:hover:not(:disabled) { opacity: 0.92; }
+
+.qx-empty {
+  padding: 60px 20px; text-align: center;
+  color: var(--fj-mid); font-size: 14px;
+  background: #fff; border: 1px dashed var(--fj-border); border-radius: 8px;
+}
+
+/* ─── REORDER VIEW (Phase C2) ──────────────────────────────────────────── */
+
+/* Reorder view fits the viewport: the only thing that scrolls is the
+   left column (slide list + removed slides). The preview pane and the
+   action bar stay visible. The height calc accounts for the fixed
+   chrome above + below: header (64px) + app-main padding-top (32px)
+   + a small 16px breathing gap at the bottom = 112px. Falls back to a
+   460px floor for very short windows.
+
+   The :has() rule below overrides the larger app-main padding-bottom
+   that the questionnaire / deck / summary views use, so the reorder
+   footer sits just above the viewport bottom rather than 80px above
+   it. */
+#app-main:has(#view-reorder:not([hidden])) {
+  padding-bottom: 16px;
+}
+#view-reorder {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 112px);
+  min-height: 460px;
+}
+#view-reorder .qx-intro    { flex: 0 0 auto; margin-bottom: 12px; }
+#view-reorder .r-shell     { flex: 1 1 auto; min-height: 0; margin-bottom: 0; }
+#view-reorder .r-footer    { flex: 0 0 auto; margin-top: 16px; }
+#view-reorder .placeholder-card { flex: 1 1 auto; }
+
+/* Compact one-line intro: title and body sit inline with a thin separator,
+   no eyebrow, smaller type. Reclaims vertical room for the master/detail
+   area below. */
+#view-reorder .qx-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  text-align: left;
+}
+#view-reorder .qx-intro-title {
+  font-size: 20px;
+  margin-bottom: 0;
+  line-height: 1.2;
+}
+#view-reorder .qx-intro-body {
+  font-size: 13.5px;
+  line-height: 1.4;
+  margin: 0;
+  max-width: none;
+  position: relative;
+  padding-left: 14px;
+}
+#view-reorder .qx-intro-body::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--fj-line, rgba(0,0,0,0.18));
+}
+
+/* Master-detail shell: list+removed left (scrolls), preview right
+   (fits whatever room the flex parent gives it). */
+.r-shell {
+  display: grid;
+  /* Picker column at the original 380px so the slide cards keep their
+     readable width. The overall #view-reorder max-width was bumped by
+     100px to make room for a wider preview pane on the right. */
+  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  gap: 18px;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+}
+
+.r-list-col {
+  display: flex; flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.r-list {
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0;
+}
+
+.r-card {
+  display: grid;
+  grid-template-columns: 22px 70px minmax(0,1fr) auto;
+  align-items: center; gap: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  box-shadow: var(--fj-card-shadow);
+  cursor: grab;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, opacity 0.2s ease;
+  position: relative;
+}
+.r-card:hover { box-shadow: var(--fj-card-shadow-hover); }
+.r-card:focus { outline: 2px solid var(--fj-gold); outline-offset: 2px; }
+.r-card:active { cursor: grabbing; }
+.r-card-dragging { opacity: 0.45; cursor: grabbing; }
+.r-card-selected {
+  border-color: var(--fj-gold);
+  background: var(--fj-gold-lt);
+  box-shadow: var(--fj-card-shadow-hover);
+}
+
+.r-card-drop-above::before,
+.r-card-drop-below::after {
+  content: '';
+  position: absolute; left: 0; right: 0; height: 3px;
+  background: var(--fj-gold);
+  border-radius: 2px;
+  z-index: 1;
+}
+.r-card-drop-above::before { top: -6px; }
+.r-card-drop-below::after  { bottom: -6px; }
+
+.r-card-handle {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 16px; line-height: 1; color: var(--fj-mid);
+  user-select: none;
+  letter-spacing: -2px;
+}
+
+/* .r-card-pos is no longer rendered; the position lives in the preview
+   pane subtitle instead. The class definition is kept here in case any
+   future surface needs the same number style. */
+.r-card-pos {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; font-weight: 700; color: var(--fj-gold);
+  text-align: center;
+}
+
+.r-card-thumb {
+  width: 70px; height: 50px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--fj-light);
+  display: block;
+}
+.r-card-thumb-empty {
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 700; letter-spacing: 1px;
+  color: var(--fj-navy); background: var(--fj-gold-lt);
+}
+
+.r-card-body { min-width: 0; }
+.r-card-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px; font-weight: 700; color: var(--fj-black);
+  letter-spacing: 0.2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.r-card-meta {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 11.5px; color: var(--fj-mid);
+}
+.r-card-key  { font-family: 'SF Mono', Consolas, monospace; font-size: 11px; }
+.r-card-tmpl { font-style: italic; }
+
+.r-card-actions {
+  display: flex; gap: 4px; align-items: center;
+}
+.r-card-btn {
+  width: 30px; height: 30px;
+  border: 1px solid var(--fj-border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px; line-height: 1;
+  color: var(--fj-black);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.r-card-btn:hover:not(:disabled)  { background: var(--fj-gold-lt); border-color: var(--fj-gold); }
+.r-card-btn:disabled              { opacity: 0.35; cursor: not-allowed; }
+.r-card-btn.r-card-remove         { color: var(--fj-red); }
+.r-card-btn.r-card-remove:hover   { background: #fdecec; border-color: var(--fj-red); }
+
+.r-card-missing {
+  background: var(--fj-light);
+  border-style: dashed;
+  cursor: default;
+}
+.r-card-missing:hover { box-shadow: var(--fj-card-shadow); }
+
+/* Removed slides zone: a clearly delineated drop-zone-style block
+   below the active list, with mini cards and a Restore button. */
+.r-removed-section {
+  margin-top: 8px;
+  padding: 14px;
+  background: rgba(17, 17, 17, 0.02);
+  border: 1px dashed var(--fj-border);
+  border-radius: 10px;
+}
+.r-removed-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.r-removed-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--fj-mid);
+}
+.r-removed-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--fj-mid); color: #fff;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 99px;
+  min-width: 22px;
+}
+.r-removed-help {
+  font-size: 11.5px; color: var(--fj-mid);
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+.r-removed-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+/* A removed card looks like an active card but with no handle, no
+   reorder buttons, a "+ Restore" button instead, and a desaturated
+   thumbnail until hover. */
+.r-card-removed {
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  cursor: default;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.r-card-removed:hover {
+  opacity: 1;
+  box-shadow: var(--fj-card-shadow);
+  transform: none;
+}
+.r-card-removed .r-card-thumb {
+  filter: grayscale(35%);
+  transition: filter 0.15s ease;
+}
+.r-card-removed:hover .r-card-thumb { filter: none; }
+.r-restore-btn {
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  color: var(--fj-navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.r-restore-btn:hover {
+  background: var(--fj-gold-lt);
+  border-color: var(--fj-gold);
+  color: var(--fj-navy);
+}
+
+/* Footer (Design E): clean white bar with circle-bordered Back link
+   on the left and a navy pill Start button on the right. */
+.r-footer {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px;
+  box-shadow: var(--fj-card-shadow);
+}
+.r-footer-back {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 12px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  color: var(--fj-mid);
+  padding: 4px 6px;
+  transition: color 0.15s ease;
+}
+.r-footer-back:hover { color: var(--fj-navy); }
+.r-footer-back-icon {
+  width: 28px; height: 28px;
+  border: 1px solid var(--fj-border);
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.r-footer-back:hover .r-footer-back-icon {
+  border-color: var(--fj-navy);
+  background: var(--fj-light);
+}
+.r-footer-start {
+  background: var(--fj-navy); color: #fff;
+  border: none;
+  padding: 14px 36px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase;
+  border-radius: 99px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.r-footer-start:hover:not(:disabled) { background: var(--fj-black); }
+.r-footer-start:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+
+/* Preview pane (master-detail right column). Edge-to-edge gallery:
+   the slide image fills the entire pane via object-fit: cover, with
+   a glass position pill in the top-right and a gradient overlay at
+   the bottom carrying the title + meta. No internal scroll. */
+.r-preview {
+  position: relative;
+  background: var(--fj-navy);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 0;
+}
+.r-preview-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.r-preview-fallback {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--fj-gold-lt), var(--fj-gold));
+  color: var(--fj-navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 64px; font-weight: 700;
+  letter-spacing: 2px;
+}
+.r-preview-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fj-light);
+  color: var(--fj-mid);
+  font-style: italic;
+  font-size: 14px;
+}
+.r-preview-badge {
+  position: absolute; top: 18px; right: 18px;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+          backdrop-filter: blur(8px);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase;
+}
+.r-preview-overlay {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 30px 36px 28px;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.85) 100%);
+  color: #fff;
+}
+.r-preview-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 600;
+  color: var(--fj-gold);
+  letter-spacing: 4px; text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.r-preview-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 36px; font-weight: 600;
+  line-height: 1.1;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
+  margin-bottom: 6px;
+}
+.r-preview-meta {
+  display: flex; gap: 16px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'SF Mono', Consolas, monospace;
+}
+
+@media (max-width: 900px) {
+  /* Stacked layout on narrow viewports: drop the viewport-height lock
+     and let the page flow naturally. The list and preview render one
+     after the other rather than side by side. */
+  #view-reorder {
+    height: auto;
+    min-height: 0;
+    display: block;
+  }
+  .r-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .r-list-col {
+    overflow-y: visible;
+    padding-right: 0;
+  }
+  .r-preview { overflow-y: visible; }
+}
+
+@media (max-width: 600px) {
+  .r-card {
+    grid-template-columns: 22px 56px minmax(0,1fr);
+    grid-template-areas:
+      'handle thumb body'
+      '.       .     actions';
+    row-gap: 8px;
+  }
+  .r-card-handle  { grid-area: handle; }
+  .r-card-thumb   { grid-area: thumb; width: 56px; height: 40px; }
+  .r-card-body    { grid-area: body; }
+  .r-card-actions { grid-area: actions; justify-content: flex-end; }
+  /* Removed cards have no handle and use a Restore button, so override
+     the active-card grid template back to a 3-column linear layout. */
+  .r-card-removed {
+    grid-template-columns: 56px minmax(0,1fr) auto;
+    grid-template-areas: none;
+    row-gap: 0;
+  }
+  .r-card-removed .r-card-thumb { width: 56px; height: 40px; }
+}
+
+/* ─── DECK VIEW (Phase C3) ─────────────────────────────────────────────── */
+
+.deck-shell {
+  /*
+    Flex container that centres the stage horizontally and vertically.
+    The stage itself is locked to a 2:1 aspect ratio (see .deck-stage
+    below); when the viewport's available rectangle is wider than 2:1
+    the stage gets letterboxed left/right, when it is taller it gets
+    letterboxed top/bottom. Either way, every template renders into the
+    same shape on every device.
+  */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  /*
+    Fill the full available height between the header and the footer.
+    Deck view turns off #app-main padding entirely (see the :has() rule
+    above), so the chrome is just header (64px) + footer (80px) = 144.
+  */
+  height: calc(100vh - 144px);
+  min-height: 420px;
+}
+.deck-stage {
+  position: relative;
+  background: var(--fj-light);
+  /* Square corners so the stage edges sit flush against the header /
+     footer / side viewport edges with no rounded gap. */
+  border-radius: 0;
+  /*
+    Fixed 2:1 aspect ratio so every template renders into the same
+    shape regardless of viewport. We drive size from `height: 100%`
+    (so the stage fills the shell vertically), let aspect-ratio derive
+    the width, and clamp via `max-width: 100%` so a tall narrow
+    viewport letterboxes top/bottom rather than overflowing sideways.
+    Browser support: aspect-ratio plus max-width together correctly
+    re-derives height when the max-width clamp engages, in all current
+    Chrome / Safari / Firefox.
+  */
+  aspect-ratio: 2 / 1;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  /*
+    No padding on the stage so full-bleed templates (hero_full_bleed,
+    video_focus) reach all four edges. Non-full-bleed templates
+    (tabbed_feature_showcase, split_story) add their own interior
+    padding inside templates/styles.css.
+
+    overflow: hidden on both axes so any template content that would
+    push past the 2:1 frame is clipped rather than forcing a
+    scrollbar. Templates must constrain their own content to fit.
+  */
+  padding: 0;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  min-width: 0;
+  /* Tell the browser we handle horizontal gestures ourselves so it
+     does not consume horizontal pans before our pointerdown/touchstart
+     handlers see them. Vertical scroll still goes to the page. */
+  touch-action: pan-y;
+}
+.deck-slide { flex: 1; min-width: 0; min-height: 0; }
+
+/* ─── Edge nav arrows ──────────────────────────────────────────────────────
+   Tall light-grey rounded pills pinned to the left and right edges of the
+   stage. Hidden via the [hidden] attribute on the first / last slide. */
+.deck-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(48px, 4.5vw, 72px);
+  height: clamp(160px, 30%, 280px);
+  background: rgba(240, 240, 240, 0.85);
+  color: #111;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+}
+.deck-arrow:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+.deck-arrow:active {
+  transform: translateY(-50%) scale(0.97);
+}
+.deck-arrow[hidden] { display: none; }
+/* Flush against the stage edges. Only the inner corners (the ones
+   facing the slide content) are rounded so the outer edge sits cleanly
+   against the viewport. */
+.deck-arrow-prev { left: 0;  border-radius: 0 14px 14px 0; }
+.deck-arrow-next { right: 0; border-radius: 14px 0 0 14px; }
+.deck-arrow svg {
+  /* Double the previous 36% so the chevron reads more clearly. */
+  width: 72%;
+  height: 72%;
+  display: block;
+}
+
+/* Slide-change animations. The deck-stage clips overflow, so the new
+   slide enters from off-stage. Forward gestures slide in from the
+   right; backward gestures slide in from the left. Easing is a soft
+   ease-out so the slide decelerates as it lands. */
+@keyframes deckSlideEnterRight {
+  from { transform: translateX(100%); opacity: 0.6; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes deckSlideEnterLeft {
+  from { transform: translateX(-100%); opacity: 0.6; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.deck-slide.deck-slide-anim-next {
+  animation: deckSlideEnterRight 400ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.deck-slide.deck-slide-anim-prev {
+  animation: deckSlideEnterLeft 400ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Respect users who turn off motion in their OS. */
+  .deck-slide.deck-slide-anim-next,
+  .deck-slide.deck-slide-anim-prev { animation: none; }
+}
+.deck-position {
+  position: absolute; top: 14px; right: 18px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: 1.4px;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  padding: 4px 10px; border-radius: 99px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* Position-dot pill anchored to the bottom of the slide. Each dot is a
+   clickable button; the active one elongates and goes white. The pill
+   floats over the slide so it works for full-bleed and content slides
+   alike. The optional jump button (Browse catalogue / Review summary)
+   trails the dots on the last slide so the user always has a forward
+   path without needing the side arrows. */
+.deck-dots {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0,0,0,0.55);
+  padding: 8px 12px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+}
+.deck-dot {
+  width: 28px; height: 4px;
+  background: rgba(255,255,255,0.4);
+  border: none; padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, width 0.15s ease;
+}
+.deck-dot:hover { background: rgba(255,255,255,0.7); }
+.deck-dot-active { background: #fff; width: 40px; }
+.deck-dot-jump {
+  margin-left: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: none;
+  background: var(--fj-gold);
+  color: var(--fj-navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+.deck-dot-jump:hover { background: #d4b455; }
+
+.deck-slide-fallback {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--fj-mid);
+}
+.deck-slide-fallback-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; font-weight: 700; color: var(--fj-black);
+  margin-bottom: 8px;
+}
+.deck-slide-fallback-body {
+  font-size: 13.5px; line-height: 1.55;
+  max-width: 420px;
+}
+
+/* Fixed footer that hugs the bottom of the viewport during the deck
+   and catalogue views. Mirrors the apparel form's #app-footer: black
+   fill, customer + counter stats on the left, action cluster on the
+   right, gold "Review Order" submit button. Hidden via [hidden] when
+   inactive. Body padding-bottom is 80px while visible so views never
+   tuck content under the bar. */
+.cart-summary {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  /* Three-column grid: stats / strip trigger / actions. The centre cell
+     auto-sizes; the outer cells share the remaining space evenly so the
+     trigger sits dead centre regardless of the left/right cluster widths.
+     Falls back to flex-style spacing when the centre is empty (1fr auto 1fr
+     with an empty auto cell still keeps the outer cells balanced). */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  height: 80px;
+  padding: 12px 24px;
+  background: #000;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  z-index: 50;
+}
+.cart-summary[hidden] { display: none; }
+.cart-summary .footer-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.cart-summary .footer-actions { justify-self: end; }
+
+/* Footer left: stat triples (customer, pairs, styles) in apparel
+   typography. */
+.cart-summary .footer-left {
+  display: flex; gap: 24px;
+  flex: 1 1 auto;
+  color: #fff;
+  min-width: 0;
+}
+.cart-summary .footer-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.cart-summary .footer-stat-label {
+  font-family: 'Barlow', sans-serif;
+  font-size: 8px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+}
+.cart-summary .footer-stat-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px; font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cart-summary .footer-stat:first-child .footer-stat-value { max-width: 280px; }
+
+/* Action cluster: outline buttons + gold submit, matching apparel. */
+.cart-summary .footer-actions {
+  display: flex; align-items: center; gap: 8px;
+  flex: 0 0 auto;
+}
+.cart-summary .btn {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 12px;
+  padding: 9px 18px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  display: inline-flex; align-items: center; gap: 7px;
+  border-radius: var(--radius);
+}
+.cart-summary .btn-outline {
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.22);
+}
+.cart-summary .btn-outline:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.4);
+}
+.cart-summary .btn-fs {
+  font-size: 16px;
+  padding: 0 10px;
+  min-width: 40px; height: 40px;
+  justify-content: center;
+}
+.cart-summary .btn-submit {
+  background: var(--fj-gold);
+  color: var(--fj-navy);
+  padding: 10px 22px;
+  border: none;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  font-size: 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+.cart-summary .btn-submit:hover {
+  background: #d4b455;
+  box-shadow: 0 2px 8px rgba(200,168,75,0.35);
+}
+/* Slide product strip trigger pill (Phase 2.2). Lives in the centre
+   column of the cart-summary footer when the active slide has products
+   attached. The icon pill mirrors the demo (`phase2/trigger-placement-demo.html`,
+   Variant D): gold pill with a black inner badge containing a single P. */
+.cart-summary .footer-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 11px;
+  background: var(--fj-gold);
+  color: #000;
+  border: 0;
+  border-radius: 999px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  transition: filter 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.cart-summary .footer-trigger:hover { filter: brightness(1.05); }
+.cart-summary .footer-trigger:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.cart-summary .footer-trigger-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #000;
+  color: var(--fj-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+/* When the strip drawer is open the trigger reads as pressed/active. The
+   real visual state lands in 2.3 alongside the drawer; for the 2.2 stub a
+   subtle background swap is enough to confirm the click landed. */
+body.fw-strip-open .cart-summary .footer-trigger {
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(255,255,255,0.18);
+}
+
+.cart-summary .btn-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* While the footer is visible, leave 80px of breathing room at the
+   bottom of #app-main so its content (deck stage, catalogue body) is
+   never tucked under the bar. */
+body.fw-footer-visible #app-main { padding-bottom: 96px; }
+
+/* ─── MODAL (cart picker + review) ─────────────────────────────────────── */
+
+.app-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 22, 40, 0.6);
+  display: none; align-items: center; justify-content: center;
+  padding: 24px;
+  z-index: 200;
+}
+.app-modal-overlay.app-modal-open { display: flex; }
+.modal-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 540px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+.modal-card.picker-modal,
+.modal-card.review-modal { max-width: 560px; }
+.modal-card.review-modal { max-width: 720px; }
+
+.picker-head { margin-bottom: 14px; }
+.picker-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--fj-gold);
+}
+.picker-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px; font-weight: 700; color: var(--fj-black);
+  margin-top: 4px;
+}
+
+.picker-rows {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 18px;
+  max-height: 340px; overflow-y: auto;
+}
+.picker-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--fj-light);
+  border: 1px solid var(--fj-border);
+  border-radius: 6px;
+}
+.picker-size-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 0.5px; color: var(--fj-black);
+  min-width: 60px;
+}
+.picker-qty { display: flex; align-items: center; gap: 6px; }
+.picker-qty-btn {
+  width: 28px; height: 28px;
+  border: 1px solid var(--fj-border);
+  background: #fff;
+  border-radius: 6px;
+  font-size: 14px; cursor: pointer;
+}
+.picker-qty-btn:hover { background: var(--fj-gold-lt); border-color: var(--fj-gold); }
+.picker-qty-input {
+  width: 56px; text-align: center;
+  border: 1px solid var(--fj-border);
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+}
+.picker-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* Review modal */
+.review-table-wrap {
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.review-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px;
+}
+.review-table th {
+  background: var(--fj-navy); color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+}
+.review-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--fj-border);
+  vertical-align: middle;
+}
+.review-table tr:last-child td { border-bottom: none; }
+.review-table .rev-name { min-width: 200px; }
+.review-table .rev-sku {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 11.5px; color: var(--fj-mid);
+}
+.review-table .rev-qty {
+  width: 64px; text-align: center;
+  border: 1px solid var(--fj-border);
+  border-radius: 6px; padding: 4px 6px;
+}
+.review-table .btn-sm {
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  color: var(--fj-red);
+}
+.review-table .btn-sm:hover {
+  background: #fdecec;
+  border-color: var(--fj-red);
+}
+.review-totals {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-bottom: 18px;
+  font-size: 13px; color: var(--fj-mid);
+}
+
+/* ─── REVIEW MODE (Section 5.2) ───────────────────────────────────────── */
+
+/* Last-slide forward affordance lives inside the dot pill now (see
+   .deck-dot-jump above); no extra rule is needed for review mode. */
+
+/* Review-mode body class: hide every Add-to-cart affordance the
+   templates render. Customer cannot modify the cart. */
+body.fw-mode-review .pg-card-add,
+body.fw-mode-review .ss-product-add,
+body.fw-mode-review .hfb-cta,
+body.fw-mode-review .vf-cta,
+body.fw-mode-review .ss-cta { display: none !important; }
+
+/* The cart-summary in review mode hides the "Share with customer" link
+   because the customer is the customer; nobody else to share with. */
+/* Share-with-customer affordance moved out of the footer; nothing to hide here. */
+
+/* Share-with-customer modal */
+.modal-card.share-modal { max-width: 540px; }
+.share-body {
+  font-size: 13.5px; line-height: 1.55; color: var(--fj-mid);
+  margin-bottom: 14px;
+}
+.share-url {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--fj-border);
+  border-radius: 6px;
+  background: var(--fj-light);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--fj-black);
+  margin-bottom: 14px;
+}
+.share-url:focus { outline: none; border-color: var(--fj-gold); background: #fff; }
+
+/* Summary view */
+.summary {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 12px;
+  padding: 32px 36px;
+  box-shadow: var(--fj-card-shadow);
+  max-width: 720px; margin: 0 auto;
+}
+.summary-header { text-align: center; margin-bottom: 24px; }
+.summary-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 600;
+  color: var(--fj-gold);
+  letter-spacing: 4px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.summary-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px; font-weight: 600;
+  color: var(--fj-black); margin-bottom: 10px;
+}
+.summary-body {
+  font-size: 14px; line-height: 1.55; color: var(--fj-mid);
+  max-width: 480px; margin: 0 auto;
+}
+.summary-totals {
+  display: flex; justify-content: center; gap: 24px;
+  margin-bottom: 18px;
+  font-size: 13px; color: var(--fj-mid);
+}
+.summary-totals b { color: var(--fj-black); }
+
+.summary-rows {
+  margin-bottom: 24px;
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.summary-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px;
+}
+.summary-table th {
+  background: var(--fj-navy); color: #fff;
+  text-align: left;
+  padding: 10px 14px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+}
+.summary-table .summary-qty-col { text-align: center; }
+.summary-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--fj-border);
+  vertical-align: middle;
+}
+.summary-table tr:last-child td { border-bottom: none; }
+.summary-sku {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 11.5px; color: var(--fj-mid);
+}
+
+.summary-empty {
+  padding: 30px 20px; text-align: center;
+  color: var(--fj-mid); font-style: italic; font-size: 13px;
+}
+.summary-loading {
+  padding: 60px 20px; text-align: center;
+  color: var(--fj-mid); font-size: 13px;
+}
+
+.summary-actions {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.summary-actions .btn-primary {
+  padding: 14px 32px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  background: var(--fj-navy); color: #fff;
+}
+.summary-actions .btn-primary:hover:not(:disabled) {
+  opacity: 0.92; background: #1a1a1a;
+}
+.summary-actions .btn-outline {
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  color: var(--fj-mid);
+}
+.summary-actions .btn-outline:hover { background: var(--fj-light); color: var(--fj-navy); }
+
+@media (max-width: 600px) {
+  .summary { padding: 24px 18px; }
+  .summary-actions { justify-content: stretch; flex-direction: column-reverse; }
+  .summary-actions .btn { width: 100%; }
+}
+
+/* ─── SUBMITTED CARD ───────────────────────────────────────────────────── */
+.submitted-card {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 10px;
+  padding: 60px 40px;
+  text-align: center;
+  margin: 60px auto 0;
+  max-width: 560px;
+  box-shadow: var(--fj-card-shadow);
+}
+.submitted-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--fj-green);
+  margin-bottom: 12px;
+}
+.submitted-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px; font-weight: 600;
+  margin-bottom: 12px;
+}
+.submitted-body {
+  font-size: 14px; line-height: 1.55; color: var(--fj-mid);
+  max-width: 420px; margin: 0 auto 24px;
+}
+
+@media (max-width: 700px) {
+  .deck-shell { height: calc(100vh - 200px); min-height: 360px; }
+  .deck-stage { padding: 0; }
+  .deck-dots { bottom: 14px; padding: 6px 10px; }
+  .deck-dot { width: 22px; }
+  .deck-dot-active { width: 32px; }
+}
+
+/* ─── PLACEHOLDER CARD (used by reorder loading and empty states) ─────── */
+
+.placeholder-card {
+  background: #fff;
+  border: 1px dashed var(--fj-border);
+  border-radius: 8px;
+  padding: 60px 28px;
+  text-align: center;
+  margin: 32px 0;
+}
+.placeholder-card-title {
+  font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700;
+  color: var(--fj-black); margin-bottom: 8px;
+}
+.placeholder-card-body {
+  font-size: 13.5px; line-height: 1.55; color: var(--fj-mid);
+  max-width: 480px; margin: 0 auto 18px;
+}
+.placeholder-card details { margin-top: 18px; text-align: left; max-width: 440px; margin-left: auto; margin-right: auto; }
+.placeholder-card details summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--fj-mid); }
+.placeholder-card details ol { margin-top: 10px; padding-left: 22px; font-size: 12.5px; color: var(--fj-mid); line-height: 1.6; }
+
+/* ─── TOAST ────────────────────────────────────────────────────────────── */
+
+#toast-container {
+  position: fixed; bottom: 20px; right: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 1000; pointer-events: none;
+}
+.toast {
+  background: var(--fj-navy); color: #fff;
+  padding: 12px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  max-width: 380px;
+  animation: toast-in 0.2s ease-out;
+}
+.toast.success { background: var(--fj-green); }
+.toast.error   { background: var(--fj-red); }
+.toast.info    { background: var(--fj-navy); }
+@keyframes toast-in {
+  from { transform: translateX(120%); }
+  to   { transform: translateX(0); }
+}
+
+/* ─── CATALOGUE VIEW ──────────────────────────────────────────────────── */
+/* Full footwear catalogue, one of the views #app-main rotates between.
+   Layout mirrors the deck/reorder pattern: fixed-height shell anchored
+   to the viewport, with only the central body scrolling so the back
+   button, collection nav, search, and cart summary stay visible. */
+
+#view-catalogue { max-width: min(1480px, 100%); margin: 0 auto; }
+#view-catalogue {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 192px);
+  min-height: 520px;
+}
+
+/* The shell is now a transparent flex column. Its children (toolbar,
+   body, cart summary) are individually styled cards that stack with a
+   12px gap, mirroring the apparel form's "card stack" page layout. */
+.cat-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px;
+}
+
+/* Toolbar card: combines the page header (back button, title block,
+   controls cluster) with the collection tab bar in a single white
+   card, the way the apparel form puts "Order Information" in one box. */
+.cat-toolbar {
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: var(--radius);
+  box-shadow: var(--fj-card-shadow);
+  overflow: hidden;
+}
+
+/* Header: back button on the left, title block in the middle,
+   search input on the right. flex: 0 0 auto keeps it at its natural
+   height so the body and tabs below get all the rest. Wraps to two
+   rows on narrow screens. */
+.cat-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--fj-border);
+  background: #fff;
+}
+.cat-back {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: 999px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--fj-black);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.cat-back:hover { border-color: var(--fj-navy); background: var(--fj-light); }
+.cat-back-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border: 1px solid var(--fj-border);
+  border-radius: 50%;
+  font-size: 11px;
+  color: var(--fj-mid);
+}
+.cat-title-block { flex: 1 1 auto; text-align: center; }
+.cat-eyebrow {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--fj-gold);
+}
+.cat-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px; font-weight: 600;
+  color: var(--fj-black);
+  line-height: 1.15;
+}
+/* Right-hand control cluster: "Show new only" toggle + search input.
+   Stacks naturally onto a second row on narrow viewports via flex-wrap
+   on .cat-header. */
+.cat-controls {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+}
+.cat-search-wrap {
+  flex: 0 0 240px;
+  display: flex; justify-content: flex-end;
+}
+.cat-search {
+  width: 100%;
+  padding: 9px 14px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 13px;
+  color: var(--fj-black);
+  background: var(--fj-light);
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.cat-search:focus {
+  outline: none;
+  border-color: var(--fj-gold);
+  background: #fff;
+}
+
+/* "Show new only" toggle. Native checkbox is hidden via clip; the
+   visible track + thumb are kept in sync via :checked sibling rules. */
+.cat-toggle {
+  display: inline-flex; align-items: center; gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.cat-toggle-input {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  margin: -1px; padding: 0; border: 0;
+}
+.cat-toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 36px; height: 20px;
+  background: var(--fj-border);
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+.cat-toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: transform 0.15s ease;
+}
+.cat-toggle-input:checked + .cat-toggle-track {
+  background: var(--fj-navy);
+}
+.cat-toggle-input:checked + .cat-toggle-track .cat-toggle-thumb {
+  transform: translateX(16px);
+}
+.cat-toggle-input:focus-visible + .cat-toggle-track {
+  outline: 2px solid var(--fj-gold);
+  outline-offset: 2px;
+}
+.cat-toggle-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--fj-black);
+}
+
+/* Tab bar across the top: one tab per collection, mirrors the apparel
+   form's .tab-bar / .tab-btn pattern exactly (same font, size, padding,
+   and 3px navy bottom-border highlight on active). flex: 0 0 auto so
+   the strip never gets squeezed by the body below. */
+.cat-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0;
+  background: #fff;
+  border-bottom: 1px solid var(--fj-border);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+  min-height: 48px;
+}
+.cat-tab {
+  flex: 1 0 auto;
+  min-width: 120px;
+  padding: 14px 16px;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  line-height: 1;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--fj-mid);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap;
+}
+.cat-tab:hover { background: var(--fj-light); color: var(--fj-navy); }
+.cat-tab-active {
+  color: var(--fj-navy);
+  background: var(--fj-light);
+  border-bottom-color: var(--fj-navy);
+}
+.cat-tab-count {
+  font-family: 'Barlow', sans-serif;
+  font-size: 10px; font-weight: 700;
+  color: var(--fj-mid);
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  letter-spacing: 0.5px;
+}
+.cat-tab-active .cat-tab-count {
+  color: var(--fj-navy);
+  border-color: var(--fj-navy);
+}
+
+/* "My selections" tab pinned to the right. Inactive looks like the
+   other tabs; active flips to a filled black pill so it reads as a
+   distinct mode (matches apparel form's MY SELECTIONS button). */
+.cat-tab-selections {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border-left: 1px solid var(--fj-border);
+}
+.cat-tab-selections.cat-tab-active {
+  background: var(--fj-navy);
+  color: #fff;
+  border-bottom-color: var(--fj-navy);
+}
+.cat-tab-selections.cat-tab-active .cat-tab-count {
+  color: #fff;
+  border-color: rgba(255,255,255,0.4);
+}
+.cat-tab-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Body: the only scrolling region. Holds one .cat-panel at a time,
+   matching the active tab. No background or padding -- the toolbar
+   above and the cart summary below are the cards; the body is just
+   the scroll container that hosts the subsection accordion cards. */
+.cat-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.cat-panel { display: block; }
+
+/* Subsection accordion: each .cat-section is one card with a clickable
+   header bar and a collapsible body holding the product grid. Mirrors
+   the apparel .collection / .collection-header / .collection-body trio
+   so the two surfaces feel like one product. */
+.cat-section {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  box-shadow: var(--fj-card-shadow);
+  overflow: hidden;
+}
+.cat-section-head {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 16px;
+  background: var(--fj-light);
+  border: none;
+  border-bottom: 1px solid var(--fj-border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.18s ease;
+  font: inherit;
+  color: inherit;
+}
+.cat-section-head:hover { background: #f0f1f5; }
+.cat-section-icon {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--fj-navy);
+  transition: transform 0.18s ease;
+}
+.cat-section-icon-closed { transform: rotate(-90deg); }
+.cat-section-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--fj-navy);
+}
+.cat-section-meta {
+  margin-left: auto;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--fj-mid);
+}
+
+.cat-section-body { display: none; }
+.cat-section-body-open { display: block; padding: 18px 16px; }
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+/* The cart summary now lives in a single fixed #fw-app-footer outside
+   the views, so no per-view override is needed here. */
+
+/* ─── Slide product strip drawer (Phase 2) ───────────────────────────────
+   The drawer is owned by slide-product-strip.js. It sits above the
+   cart-summary footer (which is 80px tall and fixed to the bottom of
+   the viewport) and slides up from below when opened. Hidden by
+   default; .is-open plays the slide-up animation.
+
+   Each card in the strip is the same .pcard the catalogue renders via
+   cart.renderProductCard, including image, badges, name, color, price,
+   the size grid and the Add 1 to all / Clear actions. Review mode adds
+   the `pcard-readonly` modifier on the rail to hide the cart-action
+   surfaces while keeping the rest of the card visible. */
+
+.fw-strip-drawer {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 80px;                      /* sit on top of the cart-summary footer */
+  z-index: 49;                       /* one below the cart-summary (50) so the footer stays visually on top */
+  background: #0d0d0d;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 -10px 30px rgba(0,0,0,0.45);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  max-height: 70vh;
+  overflow: hidden;
+  padding: 16px 24px 18px;
+  box-sizing: border-box;
+}
+.fw-strip-drawer.is-open { transform: translateY(0); }
+.fw-strip-drawer[hidden] { display: none; }
+
+.fw-strip-rail {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding-bottom: 6px;               /* leave room for any scrollbar */
+  cursor: grab;
+}
+.fw-strip-rail.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;            /* snap fights drag-scroll; restore on release */
+  user-select: none;
+}
+.fw-strip-empty {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  padding: 24px 0 8px;
+}
+
+/* Each card in the rail is the shared .pcard from cart.renderProductCard.
+   Pin to a fixed width so the horizontal layout works the same regardless
+   of how many products are attached, and so the size grid inside has a
+   predictable container to lay out against. 300px is wide enough for the
+   13 footwear sizes to sit in a single row at flex:1 and ~17px each. */
+.fw-strip-rail .pcard {
+  flex: 0 0 300px;
+  scroll-snap-align: start;
+  width: 300px;
+  max-width: 300px;
+  box-sizing: border-box;
+  cursor: default;                   /* base .pcard has cursor:pointer; the card itself isn't the click target here */
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 10px;
+  padding: 12px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.fw-strip-rail .pcard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+}
+.fw-strip-rail .pcard:focus-within {
+  outline: 2px solid var(--fj-gold);
+  outline-offset: 2px;
+}
+
+/* Read-only modifier: applied to the rail in review mode. Hides the
+   cart-action surfaces across every card without rebuilding markup. */
+.pcard-readonly .pcard-sizes,
+.pcard-readonly .pcard-actions,
+.pcard-readonly .pcard-no-sizes {
+  display: none !important;
+}
+
+/* Reduced-motion: collapse the slide-up to instant. */
+@media (prefers-reduced-motion: reduce) {
+  .fw-strip-drawer { transition: none; }
+}
+
+/* Stacked layout on narrow viewports: drop the viewport-height lock
+   so the page flows naturally and the user can scroll the whole shell. */
+@media (max-width: 700px) {
+  #view-catalogue { height: auto; min-height: 0; display: block; }
+  .cat-shell { border-radius: 8px; }
+  .cat-header {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+  .cat-controls {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .cat-search-wrap { flex: 1 1 auto; min-width: 0; }
+  .cat-tab { flex: 0 0 auto; padding: 12px 14px; min-width: 0; }
+  .cat-body { padding: 12px 14px 18px; max-height: none; }
+  .cat-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .cat-section-name { font-size: 13px; }
+  .cat-title { font-size: 18px; }
+}
+
+/* ─── RESPONSIVE ────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .header-inner { padding: 0 16px; height: 56px; }
+  .header-brand-title { font-size: 16px; }
+  #app-main { padding: 24px 16px 80px; }
+  .qx-intro-title { font-size: 24px; }
+  .qx-card { padding: 18px 16px 16px; }
+}

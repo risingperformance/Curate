@@ -1,0 +1,989 @@
+/*
+  Per-template styles, scoped under .tpl-{template_key} so templates do
+  not leak into each other. The deck-slide container itself sets the
+  scoping class via slide-renderer.js when it mounts a slide.
+
+  Each template gets its own section below.
+*/
+
+/*
+  The deck-stage has no internal padding (so full-bleed templates fill
+  edge-to-edge). Templates whose layout benefits from breathing room
+  add it on their own root selector.
+*/
+.tpl-video_focus,
+.tpl-tabbed_feature_showcase,
+.tpl-split_story { padding: 32px 36px; }
+
+@media (max-width: 700px) {
+  .tpl-video_focus,
+  .tpl-tabbed_feature_showcase,
+  .tpl-split_story { padding: 20px 18px; }
+}
+
+/* ─── hero_full_bleed ─────────────────────────────────────────────────── */
+.tpl-hero_full_bleed { padding: 0; }
+.tpl-hero_full_bleed .hfb {
+  position: relative;
+  width: 100%;
+  min-height: clamp(360px, 70vh, 720px);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  /*
+    No border-radius here. The stage already clips to 12px via overflow:
+    hidden + its own border-radius, so the hero edges follow the stage.
+  */
+}
+.tpl-hero_full_bleed .hfb-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.tpl-hero_full_bleed .hfb-bg-empty {
+  background: linear-gradient(135deg, var(--fj-navy), #1a1a1a);
+}
+.tpl-hero_full_bleed .hfb-overlay {
+  position: relative;
+  width: 100%;
+  padding: 32px 40px;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 70%);
+  color: #fff;
+}
+.tpl-hero_full_bleed .hfb-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(28px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.1;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.tpl-hero_full_bleed .hfb-sub {
+  font-family: 'Barlow', sans-serif;
+  font-size: clamp(14px, 1.6vw, 18px);
+  color: rgba(255,255,255,0.85);
+  max-width: 720px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.tpl-hero_full_bleed .hfb-cta {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 12px 26px;
+  background: var(--fj-gold);
+  color: var(--fj-navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.tpl-hero_full_bleed .hfb-cta:hover { opacity: 0.92; }
+
+/* ─── video_focus ─────────────────────────────────────────────────────── */
+.tpl-video_focus .vf {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.tpl-video_focus .vf-stage {
+  width: 100%;
+  background: var(--fj-navy);
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+.tpl-video_focus .vf-video {
+  width: 100%; height: 100%;
+  display: block;
+}
+.tpl-video_focus .vf-empty {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+  color: rgba(255,255,255,0.6);
+  font-style: italic;
+}
+.tpl-video_focus .vf-caption {
+  font-size: 14.5px; line-height: 1.55; color: var(--fj-mid);
+  max-width: 680px; text-align: center;
+}
+.tpl-video_focus .vf-actions { margin-top: 4px; }
+
+/* product_grid template was removed in Phase 5 of the slide-product-strip
+   refactor; its styles (.tpl-product_grid .pg-*) are gone. Attached
+   products now render via the slide-level strip drawer (Phase 2). The
+   shared .pcard rules below are now used by split_story and the strip. */
+
+/* ─── PRODUCT CARD (shared by split_story + slide product strip) ──────── */
+/* These rules are not scoped under .tpl- because split_story and the
+   customer-facing strip drawer (slide-product-strip.js) both render the
+   same .pcard markup via cart.renderProductCard. Sizing and typography
+   mirror the apparel `.product-card` family in index.html so footwear
+   and apparel cards line up visually. */
+
+.pcard {
+  background: #fff;
+  border: 1px solid var(--fj-border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  display: flex; flex-direction: column;
+}
+.pcard:hover {
+  border-color: var(--fj-navy);
+  box-shadow: var(--fj-card-shadow-hover);
+}
+
+.pcard-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--fj-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+/* Energy flag pinned to the top-right of the image. Footwear-only;
+   shown when products.energy is non-empty. */
+.pcard-energy-flag {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  background: var(--fj-green);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  pointer-events: none;
+}
+.pcard-img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+.pcard-img-empty {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fj-light); color: var(--fj-mid); font-size: 10px;
+}
+
+.pcard-meta-row {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.pcard-badge {
+  display: inline-block;
+  font-family: 'Barlow', sans-serif;
+  font-size: 8px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  background: var(--fj-navy); color: #fff;
+}
+.pcard-badge-new   { background: var(--fj-red);  color: #fff; }
+/* Silo (product line) reads as a category chip: white fill, mid-tone
+   text, hairline border. Same visual weight as the old width chip. */
+.pcard-badge-silo  {
+  background: transparent;
+  color: var(--fj-mid);
+  border: 1px solid var(--fj-border);
+}
+.pcard-badge-top   { background: var(--fj-gold); color: var(--fj-navy); }
+.pcard-badge-excl  { background: var(--fj-navy); color: var(--fj-gold); }
+/* Width chip flips to a filled black tag (Medium / Narrow / X Wide).
+   The default Width W is hidden in the renderer so this badge only
+   appears for non-standard widths. */
+.pcard-badge-width {
+  background: var(--fj-navy);
+  color: #fff;
+  border: none;
+}
+.pcard-sku {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--fj-mid);
+  letter-spacing: 0.5px;
+}
+
+.pcard-name {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--fj-navy);
+  margin-bottom: 4px;
+  line-height: 1.25;
+}
+.pcard-details {
+  font-size: 10px;
+  color: var(--fj-mid);
+  margin-bottom: 8px;
+}
+.pcard-price {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--fj-navy);
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 10px;
+}
+.pcard-rrp {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--fj-mid);
+}
+
+/* Inline size grid */
+.pcard-sizes {
+  display: flex; flex-wrap: nowrap;
+  gap: 5px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.size-col {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.size-label {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--fj-mid);
+  white-space: nowrap;
+}
+.size-btn {
+  width: 100%;
+  padding: 8px 2px;
+  border: 1px solid var(--fj-border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--fj-mid);
+  font-family: 'Barlow', sans-serif;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  text-align: center;
+  min-width: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.size-btn:hover { border-color: var(--fj-navy); background: var(--fj-light); }
+.size-btn.size-btn-active {
+  background: var(--fj-green);
+  color: #fff;
+  border-color: var(--fj-green);
+}
+
+.pcard-actions {
+  display: flex; gap: 5px;
+  margin-top: 0;
+}
+.pcard-add-all {
+  flex: 1;
+  padding: 6px 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  background: var(--fj-navy); color: #fff;
+  border: none; border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pcard-add-all:hover { background: var(--fj-navy-dk); }
+.pcard-clear {
+  padding: 6px 12px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  background: transparent; color: var(--fj-mid);
+  border: 1px solid var(--fj-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pcard-clear:hover {
+  background: var(--fj-light);
+  border-color: var(--fj-red);
+  color: var(--fj-red);
+}
+
+.pcard-no-sizes {
+  font-size: 10px; color: var(--fj-mid);
+  font-style: italic; margin-top: 4px;
+}
+
+/* Quantity popup (long-press / dblclick on a size button) */
+.modal-card.qty-popup { max-width: 360px; }
+.qty-popup-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--fj-border);
+  border-radius: 6px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 18px; font-weight: 700;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.qty-popup-input:focus { outline: none; border-color: var(--fj-gold); }
+
+/* Customer review mode disables the inline size interactions */
+body.fw-mode-review .size-btn       { pointer-events: none; opacity: 0.85; }
+body.fw-mode-review .pcard-actions  { display: none; }
+
+/* ─── tabbed_feature_showcase ─────────────────────────────────────────── */
+.tpl-tabbed_feature_showcase .tfs-empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--fj-mid); font-size: 14px;
+}
+.tpl-tabbed_feature_showcase .tfs-tabs {
+  display: flex; gap: 0;
+  border-bottom: 2px solid var(--fj-border);
+  margin-bottom: 18px;
+}
+.tpl-tabbed_feature_showcase .tfs-tab {
+  padding: 12px 20px;
+  background: none; border: none; cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--fj-mid);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.tpl-tabbed_feature_showcase .tfs-tab:hover { color: var(--fj-navy); }
+.tpl-tabbed_feature_showcase .tfs-tab-active {
+  color: var(--fj-navy); border-bottom-color: var(--fj-gold);
+}
+.tpl-tabbed_feature_showcase .tfs-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0,1fr);
+  gap: 18px;
+}
+.tpl-tabbed_feature_showcase .tfs-sidebar {
+  display: flex; flex-direction: column; gap: 6px;
+  border-right: 1px solid var(--fj-border);
+  padding-right: 14px;
+}
+.tpl-tabbed_feature_showcase .tfs-sb-item {
+  text-align: left;
+  background: none; border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.tpl-tabbed_feature_showcase .tfs-sb-item:hover {
+  background: var(--fj-gold-lt);
+}
+.tpl-tabbed_feature_showcase .tfs-sb-item-active {
+  background: var(--fj-gold-lt);
+  border-color: var(--fj-gold);
+}
+.tpl-tabbed_feature_showcase .tfs-sb-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700; color: var(--fj-black);
+  letter-spacing: 0.2px;
+}
+.tpl-tabbed_feature_showcase .tfs-sb-caption {
+  font-size: 12px; color: var(--fj-mid); margin-top: 2px;
+}
+.tpl-tabbed_feature_showcase .tfs-stage { display: flex; flex-direction: column; gap: 14px; }
+.tpl-tabbed_feature_showcase .tfs-hero {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--fj-light);
+  border-radius: 8px;
+}
+.tpl-tabbed_feature_showcase .tfs-hero-empty {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--fj-mid); font-style: italic;
+}
+.tpl-tabbed_feature_showcase .tfs-media-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.tpl-tabbed_feature_showcase .tfs-media-cell {
+  background: var(--fj-light);
+  border-radius: 6px; overflow: hidden;
+}
+.tpl-tabbed_feature_showcase .tfs-media-cell img,
+.tpl-tabbed_feature_showcase .tfs-media-cell video {
+  width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+}
+.tpl-tabbed_feature_showcase .tfs-media-caption {
+  padding: 6px 8px; font-size: 11px; color: var(--fj-mid);
+}
+
+@media (max-width: 700px) {
+  .tpl-tabbed_feature_showcase .tfs-body { grid-template-columns: 1fr; }
+  .tpl-tabbed_feature_showcase .tfs-sidebar {
+    border-right: none; padding-right: 0;
+    border-bottom: 1px solid var(--fj-border); padding-bottom: 12px;
+  }
+}
+
+/* ─── split_story ──────────────────────────────────────────────────────── */
+.tpl-split_story        { height: 100%; }
+.tpl-split_story .ss {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: center;
+  height: 100%;
+  min-height: 0;
+}
+.tpl-split_story .ss-media-col,
+.tpl-split_story .ss-text-col {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+/* Media column centres the media (video, image, or empty placeholder)
+   inside the column so smaller media doesn't stick to one edge. */
+.tpl-split_story .ss-media-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Text column stacks normally; if the body copy is unusually long it
+   scrolls within its column rather than overflowing the slide. */
+.tpl-split_story .ss-text-col {
+  display: block;
+  overflow: auto;
+}
+.tpl-split_story .ss-left  .ss-media-col { order: 1; }
+.tpl-split_story .ss-left  .ss-text-col  { order: 2; }
+.tpl-split_story .ss-right .ss-media-col { order: 2; }
+.tpl-split_story .ss-right .ss-text-col  { order: 1; }
+.tpl-split_story .ss-media {
+  /* Fit naturally inside the column without forcing an aspect ratio.
+     `object-fit: contain` keeps videos and images letterboxed within
+     their natural shape rather than cropping. */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+.tpl-split_story .ss-media-empty {
+  width: 100%; max-height: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fj-light);
+  color: var(--fj-mid); font-style: italic;
+}
+.tpl-split_story .ss-heading {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px; font-weight: 600; color: var(--fj-black);
+  margin-bottom: 14px;
+}
+.tpl-split_story .ss-body {
+  font-size: 14.5px; line-height: 1.6; color: var(--fj-black);
+  margin-bottom: 18px;
+}
+.tpl-split_story .ss-actions { margin-top: 18px; }
+.tpl-split_story .ss-product {
+  display: flex; gap: 14px; align-items: center;
+  background: var(--fj-light);
+  border: 1px solid var(--fj-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.tpl-split_story .ss-product-img {
+  width: 90px; height: 70px; object-fit: cover;
+  border-radius: 4px;
+  background: #fff;
+}
+.tpl-split_story .ss-product-body { flex: 1; }
+.tpl-split_story .ss-product-sku {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 11px; color: var(--fj-mid);
+}
+.tpl-split_story .ss-product-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 700; color: var(--fj-black);
+  margin: 2px 0 6px;
+}
+
+@media (max-width: 700px) {
+  .tpl-split_story .ss { grid-template-columns: 1fr; }
+  .tpl-split_story .ss-left  .ss-media-col,
+  .tpl-split_story .ss-right .ss-media-col { order: 0; }
+  .tpl-split_story .ss-left  .ss-text-col,
+  .tpl-split_story .ss-right .ss-text-col  { order: 1; }
+}
+
+
+/* ─── Template: heading_with_media ────────────────────────────────────────
+   Top-aligned heading in heavy bold uppercase, with a single image or
+   video filling the rest of the slide below it. Proportions and padding
+   match the wireframe (title takes ~12-15% of vertical space, media
+   fills the rest with a small gap). Aeonik substitute: Barlow Condensed
+   at weight 800 -- already loaded site-wide and gives the same visual
+   weight + geometric feel.
+*/
+.tpl-heading_with_media .hwm {
+  width: 100%;
+  height: 100%;
+  /* Padding scales with stage size: 3% horizontal, 3% top, 3% bottom.
+     The 2:1 stage means horizontal padding is half of vertical padding
+     in absolute terms, which keeps the title close to the left edge as
+     in the wireframe. */
+  padding: 3% 3.5%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5%;
+  background: #fff;
+  box-sizing: border-box;
+}
+.tpl-heading_with_media .hwm-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  /* Sized so a 100-character title fits on at most two lines at the
+     stage's natural width. Clamp keeps it readable on small viewports
+     and stops it growing absurdly large on huge displays. */
+  font-size: clamp(20px, 3.5vw, 60px);
+  line-height: 1.0;
+  letter-spacing: -0.005em;
+  color: #000;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+.tpl-heading_with_media .hwm-media-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tpl-heading_with_media .hwm-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tpl-heading_with_media video.hwm-media {
+  /* video controls need a bit more breathing room and contain rather than
+     cover so the player chrome stays visible. */
+  object-fit: contain;
+  background: #000;
+}
+.tpl-heading_with_media .hwm-media-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  font-size: 14px;
+}
+
+
+/* ─── Template: three_button_swap ──────────────────────────────────────────
+   Title at the top, three vertically-stacked icon-and-label buttons on
+   the left, swappable content area on the right. Salmon/coral active
+   state, otherwise pure black. Buttons are equal height; content area
+   uses object-fit: cover so author-supplied 3000x1430-ish media fills
+   the space without letterboxing.
+*/
+.tpl-three_button_swap {
+  --tbs-active: #e6928a;        /* salmon/coral active button */
+  --tbs-btn-bg: #000;
+  --tbs-btn-fg: #fff;
+}
+.tpl-three_button_swap .tbs {
+  width: 100%;
+  height: 100%;
+  padding: 3% 3.5%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5%;
+  background: #fff;
+  box-sizing: border-box;
+}
+.tpl-three_button_swap .tbs-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  font-size: clamp(20px, 3.5vw, 60px);
+  line-height: 1.0;
+  letter-spacing: -0.005em;
+  color: #000;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+.tpl-three_button_swap .tbs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 1.5%;
+}
+.tpl-three_button_swap .tbs-col {
+  /* Button column: ~18% of stage width to match the screenshot proportion. */
+  flex: 0 0 18%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5%;
+  min-width: 0;
+}
+.tpl-three_button_swap .tbs-btn {
+  /* Each of the three buttons takes an equal share of the column height. */
+  flex: 1 1 0;
+  min-height: 0;
+  background: var(--tbs-btn-bg);
+  color: var(--tbs-btn-fg);
+  border: 0;
+  padding: 8% 10%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8%;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+}
+/* Icon-present buttons use a smaller gap so the label sits closer to
+   the icon. With justify-content: center the column re-centres in the
+   shorter space, which also brings the icon down a touch toward
+   centre, but the asymmetry between icon-top and label-bottom gaps
+   stays small. */
+.tpl-three_button_swap .tbs-btn:has(.tbs-icon) {
+  gap: 4%;
+}
+.tpl-three_button_swap .tbs-btn:hover { transform: translateY(-1px); }
+.tpl-three_button_swap .tbs-btn-active {
+  background: var(--tbs-active);
+}
+.tpl-three_button_swap .tbs-icon {
+  /* Icon takes a fixed share of the button height; SVGs scale to fit. */
+  width: 40%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.tpl-three_button_swap .tbs-icon svg,
+.tpl-three_button_swap .tbs-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.tpl-three_button_swap .tbs-icon-empty {
+  background: rgba(255,255,255,0.08);
+}
+.tpl-three_button_swap .tbs-btn-label {
+  font-weight: 700;
+  font-size: clamp(22px, 2.2vw, 36px);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: center;
+  /* line-height 1 by default. With no icon the label is centered alone,
+     so leading insets do not matter visually. */
+  line-height: 1;
+  color: #fff;
+}
+/* Icon-present buttons get more line-height for breathing room on
+   multi-line labels. The translateY shifts the visible label up
+   slightly without changing layout, so the icon's position is
+   untouched. Tune -X% to move the label more or less. */
+.tpl-three_button_swap .tbs-btn:has(.tbs-icon) .tbs-btn-label {
+  line-height: 1.2;
+  transform: translateY(-10%);
+}
+.tpl-three_button_swap .tbs-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  background: #f3f4f6;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tpl-three_button_swap .tbs-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tpl-three_button_swap video.tbs-media {
+  background: #000;
+}
+.tpl-three_button_swap .tbs-media-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-style: italic;
+  font-size: 14px;
+}
+.tpl-three_button_swap .tbs-overlay {
+  /* Overlay sits in the upper-center of the content area, like the
+     FOOTJOY PURPOSE example. White text with a subtle text-shadow so
+     it reads on most media. Author chooses media that complements. */
+  position: absolute;
+  inset: 6% 8% auto 8%;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.tpl-three_button_swap .tbs-overlay-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  font-size: clamp(16px, 2.2vw, 36px);
+  text-transform: uppercase;
+  margin-bottom: 0.4em;
+  line-height: 1.05;
+}
+.tpl-three_button_swap .tbs-overlay-text {
+  font-family: 'Barlow', sans-serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(12px, 1.3vw, 20px);
+  line-height: 1.45;
+  max-width: 80%;
+  margin: 0 auto;
+}
+
+
+/* ─── Template: four_button_swap ───────────────────────────────────────────
+   Four stacked icon-and-label buttons in the left column, swappable
+   content area on the right. Uses the same icon size, font size, and
+   spacing rules as three_button_swap so the two templates stay
+   visually consistent in the deck.
+*/
+.tpl-four_button_swap {
+  --fbs-active: #e6928a;
+  --fbs-btn-bg: #000;
+  --fbs-btn-fg: #fff;
+}
+.tpl-four_button_swap .fbs {
+  width: 100%;
+  height: 100%;
+  padding: 3% 3.5%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5%;
+  background: #fff;
+  box-sizing: border-box;
+}
+.tpl-four_button_swap .fbs-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  font-size: clamp(20px, 3.5vw, 60px);
+  line-height: 1.0;
+  letter-spacing: -0.005em;
+  color: #000;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+.tpl-four_button_swap .fbs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 1.5%;
+}
+.tpl-four_button_swap .fbs-col {
+  flex: 0 0 18%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5%;
+  min-width: 0;
+}
+.tpl-four_button_swap .fbs-btn {
+  /* Each of the four buttons takes an equal share of the column. */
+  flex: 1 1 0;
+  min-height: 0;
+  background: var(--fbs-btn-bg);
+  color: var(--fbs-btn-fg);
+  border: 0;
+  padding: 8% 10%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8%;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+}
+.tpl-four_button_swap .fbs-btn:has(.fbs-icon) {
+  gap: 4%;
+}
+.tpl-four_button_swap .fbs-btn:hover { transform: translateY(-1px); }
+.tpl-four_button_swap .fbs-btn-active {
+  background: var(--fbs-active);
+}
+.tpl-four_button_swap .fbs-icon {
+  /* 25% smaller than the three_button_swap icon (40% -> 30%). The tighter
+     column height on a 4-button slide benefits from a smaller mark. */
+  width: 30%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.tpl-four_button_swap .fbs-icon svg,
+.tpl-four_button_swap .fbs-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+.tpl-four_button_swap .fbs-btn-label {
+  font-weight: 700;
+  /* 25% smaller than three_button_swap (22-36px -> 17-27px). */
+  font-size: clamp(17px, 1.65vw, 27px);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1;
+  color: #fff;
+}
+.tpl-four_button_swap .fbs-btn:has(.fbs-icon) .fbs-btn-label {
+  line-height: 1.2;
+  transform: translateY(-10%);
+}
+.tpl-four_button_swap .fbs-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  background: #f3f4f6;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tpl-four_button_swap .fbs-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tpl-four_button_swap video.fbs-media {
+  background: #000;
+}
+.tpl-four_button_swap .fbs-media-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-style: italic;
+  font-size: 14px;
+}
+.tpl-four_button_swap .fbs-overlay {
+  position: absolute;
+  inset: 6% 8% auto 8%;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.tpl-four_button_swap .fbs-overlay-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  font-size: clamp(16px, 2.2vw, 36px);
+  text-transform: uppercase;
+  margin-bottom: 0.4em;
+  line-height: 1.05;
+}
+.tpl-four_button_swap .fbs-overlay-text {
+  font-family: 'Barlow', sans-serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(12px, 1.3vw, 20px);
+  line-height: 1.45;
+  max-width: 80%;
+  margin: 0 auto;
+}
+
+
+/* ─── Template: title_page ─────────────────────────────────────────────────
+   Full-bleed background image/video with a large white title overlaid in
+   the upper-left and a black call-to-action button below it. Clicking
+   the button calls services.nav.next() to advance the deck.
+*/
+.tpl-title_page { padding: 0; }
+.tpl-title_page .tp {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.tpl-title_page .tp-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tpl-title_page .tp-bg-empty {
+  background: linear-gradient(135deg, #1a1a1a, #0a1834);
+}
+.tpl-title_page .tp-overlay {
+  /* Anchor everything in the upper-left of the slide. The overlay sits
+     above the background but does not capture pointer events except on
+     the button itself. */
+  position: absolute;
+  inset: 28% 0 auto 6%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Gap roughly matches button height so there is a clear break between
+     the title block and the CTA. Clamp keeps it sensible across the
+     stage's responsive size range. Scaled with the button (50% larger). */
+  gap: clamp(60px, 6vw, 96px);
+  pointer-events: none;
+}
+.tpl-title_page .tp-title {
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 800;
+  /* 30% larger than the original 28-78px range. */
+  font-size: clamp(36px, 5.85vw, 101px);
+  line-height: 1.0;
+  letter-spacing: -0.005em;
+  color: #fff;
+  text-transform: uppercase;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  max-width: 60%;
+}
+.tpl-title_page .tp-cta {
+  pointer-events: auto;
+  background: #000;
+  color: #fff;
+  border: 0;
+  font-family: 'Barlow Condensed', 'Barlow', sans-serif;
+  font-weight: 700;
+  /* 50% larger than the original 14-22px size; padding is in em so it
+     scales with the font automatically. */
+  font-size: clamp(21px, 2.1vw, 33px);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.9em 2.2em;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+.tpl-title_page .tp-cta:hover {
+  background: #1a1a1a;
+  transform: translateY(-1px);
+}
