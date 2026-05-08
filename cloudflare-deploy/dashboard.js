@@ -11,6 +11,7 @@ let targets      = {};
 let nationalTargets = { AU: 0, NZ: 0 };
 let allCustomers = {};  // keyed by account_name (lowercase)
 let baseSkuMap   = {};  // sku -> base_sku for image lookups
+let openSeasonIds = new Set();  // active seasons -> Top Products filter
 let includePrebook = false;
 
 // ── XSS HELPERS ─────────────────────────────────────────────────────────────
@@ -37,12 +38,18 @@ async function handleLogin() {
     return;
   }
   // Verify user is a salesperson
-  const { data: sp } = await supa.from('salespeople').select('name, role').eq('email', email).single();
+  const { data: sp } = await supa.from('salespeople').select('name, email, role, country').eq('email', email).single();
   if (!sp) {
     errEl.textContent = 'Account not linked to a salesperson. Contact your admin.';
     await supa.auth.signOut();
     return;
   }
+  window.currentUser = {
+    name:    sp.name    || '',
+    email:   sp.email   || email,
+    role:    sp.role    || 'rep',
+    country: sp.country || null
+  };
   unlockDashboard();
 }
 
@@ -62,8 +69,17 @@ function unlockDashboard() {
   const { data: { session } } = await supa.auth.getSession();
   if (session) {
     // Verify still a valid salesperson
-    const { data: sp } = await supa.from('salespeople').select('name, role').eq('email', session.user.email).single();
-    if (sp) { unlockDashboard(); return; }
+    const { data: sp } = await supa.from('salespeople').select('name, email, role, country').eq('email', session.user.email).single();
+    if (sp) {
+      window.currentUser = {
+        name:    sp.name    || '',
+        email:   sp.email   || session.user.email,
+        role:    sp.role    || 'rep',
+        country: sp.country || null
+      };
+      unlockDashboard();
+      return;
+    }
     await supa.auth.signOut();
   }
   // No session - show login, focus email field
@@ -102,7 +118,7 @@ function showTab(id) {
 async function loadAll() {
   document.getElementById('last-updated').textContent = 'Refreshing…';
 
-  const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes] = await Promise.all([
+  const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes, seasonsRes] = await Promise.all([
     supa.from('orders').select('*').order('order_date', { ascending: false }),
     supa.from('order_lines').select('*'),
     // Apparel-only here. After AW27 footwear launches the dashboard will
@@ -113,7 +129,8 @@ async function loadAll() {
     supa.from('draft_orders').select('*').order('created_at', { ascending: false }),
     supa.from('customer_season_history').select('*'),
     supa.from('products').select('sku, base_sku'),
-    supa.from('salespeople').select('name, country')
+    supa.from('salespeople').select('name, country'),
+    supa.from('seasons').select('season_id, status').eq('status', 'active')
   ]);
 
   allOrders    = ordersRes.data  || [];
@@ -122,6 +139,12 @@ async function loadAll() {
 
   baseSkuMap = {};
   (productsRes.data || []).forEach(p => { if (p.base_sku) baseSkuMap[p.sku] = p.base_sku; });
+
+  // Open seasons -> filter the Top Products panel to "this season" only.
+  // If the seasons table is empty (legacy install), the panel falls back
+  // to all-time across every order.
+  openSeasonIds = new Set((seasonsRes.data || []).map(s => s.season_id));
+
   allCustomers = {};
 
   // Build salesperson -> country map from salespeople table
@@ -424,6 +447,13 @@ function renderTopProducts() {
   const groupFilter = document.getElementById('group-filter').value;
   const byDollars   = topMetric === 'dollars';
 
+  // Open seasons filter: only count orders whose season_id is currently
+  // active. If the seasons table is empty (legacy install) we fall back
+  // to all-time so the dashboard still renders something useful.
+  const openSeasonOrderIds = openSeasonIds.size
+    ? new Set(allOrders.filter(o => openSeasonIds.has(o.season_id)).map(o => o.order_id))
+    : null;
+
   // Build set of order_ids whose customer belongs to the selected group
   let groupOrderIds = null;
   if (groupFilter) {
@@ -435,24 +465,30 @@ function renderTopProducts() {
     });
   }
 
-  // Filter lines by collection
+  // Filter lines: collection -> open-season -> customer-group, in that order.
   let lines = collFilter ? allLines.filter(l => l.collection_id === collFilter) : [...allLines];
-
-  // Further filter by customer group
+  if (openSeasonOrderIds) {
+    lines = lines.filter(l => openSeasonOrderIds.has(l.order_id));
+  }
   if (groupOrderIds) {
     lines = lines.filter(l => groupOrderIds.has(l.order_id));
   }
 
+  // Group by base_sku so different colourways/widths of the same product
+  // roll up to one row. Falls back to sku when no base_sku is mapped.
   const skuMap = {};
   lines.forEach(l => {
-    if (!skuMap[l.sku]) skuMap[l.sku] = {
-      sku: l.sku, desc: l.product_name, collection: l.collection_id,
-      accounts: new Set(), units: 0, dollars: 0
+    const groupKey = baseSkuMap[l.sku] || l.sku;
+    if (!skuMap[groupKey]) skuMap[groupKey] = {
+      sku: groupKey, desc: l.product_name, collection: l.collection_id,
+      accounts: new Set(), units: 0, dollars: 0,
+      memberSkus: new Set()
     };
+    skuMap[groupKey].memberSkus.add(l.sku);
     const order = window._orderLookup[l.order_id];
-    if (order) skuMap[l.sku].accounts.add(order.account_name);
-    skuMap[l.sku].units   += (l.quantity || 0);
-    skuMap[l.sku].dollars += (l.line_total || (l.unit_price || 0) * (l.quantity || 0));
+    if (order) skuMap[groupKey].accounts.add(order.account_name);
+    skuMap[groupKey].units   += (l.quantity || 0);
+    skuMap[groupKey].dollars += (l.line_total || (l.unit_price || 0) * (l.quantity || 0));
   });
 
   const rows = Object.values(skuMap).sort((a, b) => byDollars ? b.dollars - a.dollars : b.units - a.units);
@@ -1020,9 +1056,62 @@ async function saveTargets() {
 // Login button
 document.getElementById('login-btn').addEventListener('click', handleLogin);
 
-// Header buttons
+// Header buttons (legacy; the visible UI is the hamburger menu, but the
+// hidden buttons keep their listeners in case other code triggers them).
 document.getElementById('btn-refresh-load').addEventListener('click', loadAll);
 document.getElementById('btn-sign-out').addEventListener('click', handleSignOut);
+
+// ── Hamburger menu ─────────────────────────────────────────────────────────
+function toggleHeaderMenu() {
+  var menu = document.getElementById('header-menu');
+  var btn  = document.getElementById('header-menu-btn');
+  if (!menu || !btn) return;
+  if (menu.hidden) {
+    var u = window.currentUser || {};
+    var nameEl  = document.getElementById('header-menu-profile-name');
+    var emailEl = document.getElementById('header-menu-profile-email');
+    if (nameEl)  nameEl.textContent  = u.name  || 'Signed in';
+    if (emailEl) emailEl.textContent = u.email || '-';
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+function closeHeaderMenu() {
+  var menu = document.getElementById('header-menu');
+  var btn  = document.getElementById('header-menu-btn');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+var menuTriggerBtn = document.getElementById('header-menu-btn');
+if (menuTriggerBtn) {
+  menuTriggerBtn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    toggleHeaderMenu();
+  });
+}
+document.querySelectorAll('[data-dash-menu]').forEach(function (item) {
+  item.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    var act = item.getAttribute('data-dash-menu');
+    closeHeaderMenu();
+    if      (act === 'home')    window.location.assign('index.html');
+    else if (act === 'refresh') loadAll();
+    else if (act === 'signout') handleSignOut();
+  });
+});
+document.addEventListener('click', function (ev) {
+  var menu = document.getElementById('header-menu');
+  if (!menu || menu.hidden) return;
+  if (ev.target.closest('#header-menu') || ev.target.closest('#header-menu-btn')) return;
+  closeHeaderMenu();
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closeHeaderMenu();
+});
 
 // Tab buttons
 document.querySelectorAll('.tab-btn').forEach(btn => {

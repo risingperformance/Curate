@@ -34,6 +34,14 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
   // ── Check for existing session on page load ──
   // Also handles SSO bypass from diary (from=diary) -- Supabase Auth
   // session is shared via localStorage, so no credentials in URL needed.
+  // The CSS hides #login-screen by default. revealLogin shows it once
+  // we know the user is unauthenticated, which avoids the brief login
+  // flash for reps coming back from an order form.
+  function revealLogin() {
+    if (screen) screen.classList.add('visible');
+    if (emailEl) emailEl.focus();
+  }
+
   async function checkExistingSession() {
     var hash = window.location.hash || '';
     var isDraftLink = hash.indexOf('draft=') !== -1;
@@ -51,18 +59,32 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
               role: sp.role || 'rep', country: sp.country || null
             };
           }
-          screen.style.display = 'none';
+          if (screen) screen.style.display = 'none';
         } else {
           await loginWithSession(session);
         }
       } else if (!isDraftLink) {
-        emailEl.focus();
+        revealLogin();
       }
+    } catch (e) {
+      // Network / auth blip -- show the login so the user can recover.
+      if (!isDraftLink) revealLogin();
     } finally {
       // Signal to init() that session check is complete
       _sessionReady();
     }
   }
+
+  // Safety net: if checkExistingSession is somehow stuck (script error,
+  // very slow network), show the login after 4s so the user is never
+  // left staring at a black screen.
+  setTimeout(function () {
+    if (window.currentUser) return;
+    var s = document.getElementById('login-screen');
+    if (s && !s.classList.contains('visible') && s.style.display !== 'none') {
+      s.classList.add('visible');
+    }
+  }, 4000);
 
   // ── Resolve authenticated user to salesperson record ──
   async function loginWithSession(session) {
@@ -155,6 +177,7 @@ async function signOut() {
   document.getElementById('app-footer').style.display = 'none';
   const login = document.getElementById('login-screen');
   login.classList.remove('fade-out');
+  login.classList.add('visible');     // CSS hides by default; reveal explicitly
   login.style.display = '';
   document.getElementById('login-email').value = '';
   document.getElementById('login-password').value = '';

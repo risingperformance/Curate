@@ -1762,12 +1762,17 @@
   #draft-banner-close:hover { color: #fff; }
 
   /* ── LOGIN SCREEN ─────────────────────────────────────────── */
+  /* Login screen starts hidden so reps with an existing Supabase session
+     don't see it flash on every navigation back to the root. The early
+     session check below reveals it (via the .visible class) if no
+     session is found, or if the session check errors out. */
   #login-screen {
     position: fixed; inset: 0; background: #000;
-    display: flex; flex-direction: column;
+    display: none; flex-direction: column;
     align-items: center; justify-content: center;
     z-index: 99999; transition: opacity 0.5s ease;
   }
+  #login-screen.visible { display: flex; }
   #login-screen.fade-out { opacity: 0; pointer-events: none; }
 
   /* ── DRAFT LOADING SCREEN ──────────────────────────────── */

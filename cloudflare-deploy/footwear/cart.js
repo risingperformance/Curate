@@ -553,6 +553,102 @@
     modal.querySelector('[data-fw-cart="rev-submit"]').addEventListener('click', submit);
   }
 
+  // ── Email body builder ──────────────────────────────────────────────────
+  // Composes a plain HTML summary of the cart so we can reuse the
+  // apparel form's send-order-email edge function (which expects
+  // { subject, html } and forwards to Brevo). Keeps the markup minimal
+  // and inline-styled so most email clients render it consistently.
+  function buildFootwearOrderEmailHtml(c) {
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    var customer = c.state.customer || {};
+    var rep      = c.state.currentUser || {};
+    var cart     = c.state.cartItems || [];
+    var lookup   = (c.catalogue && typeof c.catalogue.getProductById === 'function')
+                     ? c.catalogue.getProductById : function () { return null; };
+
+    // Group cart by product. Each group lists its size+width breakdown.
+    var groups = {};
+    cart.forEach(function (it) {
+      var pid = it.product_id || '_unknown';
+      if (!groups[pid]) groups[pid] = { product: lookup(pid), items: [] };
+      groups[pid].items.push(it);
+    });
+
+    var totalPairs   = 0;
+    var totalStyles  = Object.keys(groups).length;
+    var rowsHtml = Object.keys(groups).map(function (pid) {
+      var g  = groups[pid];
+      var p  = g.product || {};
+      var sizesText = g.items
+        .map(function (it) {
+          totalPairs += Number(it.quantity || 0);
+          return esc((it.size || '-') + (it.width ? ' ' + it.width : '')) + ': ' + (it.quantity || 0);
+        })
+        .join(' &middot; ');
+      var groupUnits = g.items.reduce(function (s, it) { return s + Number(it.quantity || 0); }, 0);
+      return ''
+        + '<tr>'
+        +   '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">' + esc(p.sku || pid) + '</td>'
+        +   '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb"><strong>' + esc(p.name || p.product_name || '(unnamed)') + '</strong>'
+        +     (p.colour ? '<br><span style="font-size:12px;color:#6b7280">' + esc(p.colour) + '</span>' : '')
+        +   '</td>'
+        +   '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">' + sizesText + '</td>'
+        +   '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700">' + groupUnits + '</td>'
+        + '</tr>';
+    }).join('');
+
+    var dateStr = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    return ''
+      + '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'
+      + '<body style="margin:0;padding:0;background:#f6f7fb;font-family:Arial,Helvetica,sans-serif;color:#111827">'
+      +   '<div style="max-width:760px;margin:0 auto;padding:24px">'
+      +     '<div style="background:#0a1834;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0">'
+      +       '<div style="font-size:11px;letter-spacing:3px;color:#c8a84b">FOOTJOY CURATE</div>'
+      +       '<div style="font-family:Georgia,serif;font-size:24px;margin-top:6px">Footwear Prebook Order</div>'
+      +     '</div>'
+      +     '<div style="background:#fff;padding:20px 24px;border:1px solid #e5e7eb;border-top:0">'
+      +       '<table style="width:100%;font-size:13px;color:#374151;border-collapse:collapse">'
+      +         '<tr>'
+      +           '<td style="padding:4px 0"><strong>Account</strong></td>'
+      +           '<td style="padding:4px 0;text-align:right">' + esc(customer.account_name || customer.account_code || '-') + '</td>'
+      +         '</tr>'
+      +         '<tr>'
+      +           '<td style="padding:4px 0"><strong>Account manager</strong></td>'
+      +           '<td style="padding:4px 0;text-align:right">' + esc(customer.account_manager || rep.name || '-') + '</td>'
+      +         '</tr>'
+      +         '<tr>'
+      +           '<td style="padding:4px 0"><strong>Submitted</strong></td>'
+      +           '<td style="padding:4px 0;text-align:right">' + esc(dateStr) + '</td>'
+      +         '</tr>'
+      +         '<tr>'
+      +           '<td style="padding:4px 0"><strong>Pairs</strong></td>'
+      +           '<td style="padding:4px 0;text-align:right">' + totalPairs + '</td>'
+      +         '</tr>'
+      +         '<tr>'
+      +           '<td style="padding:4px 0"><strong>Styles</strong></td>'
+      +           '<td style="padding:4px 0;text-align:right">' + totalStyles + '</td>'
+      +         '</tr>'
+      +       '</table>'
+      +     '</div>'
+      +     '<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-top:0">'
+      +       '<thead><tr style="background:#fafafa;text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#6b7280">'
+      +         '<th style="padding:10px;border-bottom:1px solid #e5e7eb">SKU</th>'
+      +         '<th style="padding:10px;border-bottom:1px solid #e5e7eb">Product</th>'
+      +         '<th style="padding:10px;border-bottom:1px solid #e5e7eb">Sizes</th>'
+      +         '<th style="padding:10px;border-bottom:1px solid #e5e7eb;text-align:right">Units</th>'
+      +       '</tr></thead>'
+      +       '<tbody>' + rowsHtml + '</tbody>'
+      +     '</table>'
+      +     '<div style="padding:14px 24px;font-size:12px;color:#6b7280">Submitted via FootJoy Curate &middot; Draft id ' + esc(c.state.activeDraftId || '-') + '</div>'
+      +   '</div>'
+      + '</body></html>';
+  }
+
   // ── Submit ──────────────────────────────────────────────────────────────
   async function submit() {
     var c = window.fwApp;
@@ -569,9 +665,21 @@
     }
 
     // Get the auth token to attach as Authorization. Edge functions
-    // protected with verify_jwt require this.
+    // protected with verify_jwt require this. Falls back to the
+    // publishable/anon key when no session token is available
+    // (mirrors the apparel form's pattern).
     var session = await c.supa.auth.getSession();
-    var token   = session && session.data && session.data.session && session.data.session.access_token;
+    var sessionToken = session && session.data && session.data.session && session.data.session.access_token;
+    var anonKey = (window.__SUPABASE_CONFIG && window.__SUPABASE_CONFIG.key) || '';
+    var token   = sessionToken || anonKey;
+
+    // Build the email payload. We share the apparel form's send-order-email
+    // edge function which expects { subject, html } and forwards to Brevo.
+    var customer = c.state.customer || {};
+    var subject  = 'FootJoy Footwear Prebook Order — '
+                 + (customer.account_name || customer.account_code || 'Customer')
+                 + ' — ' + new Date().toLocaleDateString('en-AU');
+    var html     = buildFootwearOrderEmailHtml(c);
 
     var emailRes;
     try {
@@ -579,15 +687,9 @@
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': token ? ('Bearer ' + token) : '',
+          'Authorization': 'Bearer ' + token,
         },
-        body: JSON.stringify({
-          draft_id:     c.state.activeDraftId,
-          share_token:  c.state.activeShareToken,
-          rep_email:    (c.state.currentUser || {}).email,
-          rep_name:     (c.state.currentUser || {}).name,
-          cart_items:   c.state.cartItems,
-        }),
+        body: JSON.stringify({ subject: subject, html: html }),
       });
       var bodyText = '';
       try { bodyText = await resp.text(); } catch (e) { /* ignore */ }
@@ -598,11 +700,10 @@
 
     if (!emailRes.ok) {
       var msg = 'Order email did not send. ';
-      if (emailRes.status === 404) {
-        msg += 'The send-footwear-order-email edge function is not deployed yet at ' + c.EMAIL_EDGE_FN
-            +  '. Your order is saved as a draft. Engineering needs to deploy the function before submission can complete.';
-      } else if (emailRes.status === 401 || emailRes.status === 403) {
+      if (emailRes.status === 401 || emailRes.status === 403) {
         msg += 'Auth was rejected by the edge function (status ' + emailRes.status + '). Check the verify_jwt setting on the function.';
+      } else if (emailRes.status === 404) {
+        msg += 'The send-order-email edge function was not found at ' + c.EMAIL_EDGE_FN + '.';
       } else {
         msg += '(status ' + emailRes.status + ') ' + emailRes.body;
       }

@@ -25,10 +25,10 @@
   var SUPA_KEY = window.__SUPABASE_CONFIG.key;
   var supa     = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 
-  // Footwear order email edge function. Phase C3 wires submit to call this.
-  // The function itself is a separate engineering ticket; until it lands the
-  // submit handler will surface a clear error with this URL.
-  var EMAIL_EDGE_FN = SUPA_URL + '/functions/v1/send-footwear-order-email';
+  // Footwear shares the apparel form's send-order-email edge function.
+  // Both POST { subject, html } and Brevo sends to the configured
+  // ORDER_RECIPIENT. Saves us a separate footwear-specific function.
+  var EMAIL_EDGE_FN = SUPA_URL + '/functions/v1/send-order-email';
 
   // ── State ───────────────────────────────────────────────────────────────
   // Session-scoped. Survives view transitions; cleared on sign out.

@@ -75,20 +75,69 @@
   .login-forgot:hover { color: rgba(255,255,255,0.7); }
 
   /* ── HEADER ── */
+  /* ── Header (FootJoy logo · Dashboard title · Curate logo + menu) ── */
   .header {
-    background: var(--navy); padding: 0 28px; height: 64px;
-    display: flex; align-items: center; justify-content: space-between;
     position: sticky; top: 0; z-index: 100;
+    background: #000;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
   }
-  .header-brand {
-    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
-    font-weight: 600; letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+  .header-inner {
+    max-width: 1680px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px; height: 64px;
   }
-  .header-title {
-    font-family: 'Barlow Condensed', sans-serif; font-size: 18px;
-    font-weight: 700; color: #fff; letter-spacing: 0.5px;
+  .header .fj-logo { display: flex; align-items: center; }
+  .header .fj-logo-img { height: 36px; width: auto; display: block; }
+  .header .header-title {
+    flex: 1; text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 5px; text-transform: uppercase;
   }
-  .header-right { display: flex; align-items: center; gap: 12px; }
+  .header-actions { display: flex; align-items: center; gap: 14px; }
+  .header-curate-mark { display: flex; align-items: center; opacity: 0.85; }
+  .header-curate-mark img { height: 22px; width: auto; display: block; }
+  .header-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.9);
+    border-radius: 4px; cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  .header-menu-btn:hover { background: rgba(255,255,255,0.12); }
+  .header-menu-btn[aria-expanded="true"] { background: rgba(255,255,255,0.18); }
+  .header-menu {
+    position: absolute;
+    top: calc(100% + 4px); right: 32px;
+    min-width: 240px;
+    background: #fff; color: #111;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    z-index: 200;
+    padding: 6px 0;
+    font-family: 'Barlow', sans-serif;
+  }
+  .header-menu[hidden] { display: none; }
+  .header-menu-profile { padding: 10px 16px 8px; line-height: 1.2; }
+  .header-menu-profile-name { font-weight: 700; font-size: 13px; color: #111; }
+  .header-menu-profile-email { font-size: 11px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .header-menu-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+  .header-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    border: 0; background: transparent;
+    color: #111;
+    font-family: inherit; font-size: 14px; text-align: left;
+    cursor: pointer;
+  }
+  .header-menu-item:hover { background: #f3f4f6; }
+  .header-menu-icon { width: 18px; text-align: center; color: #6b7280; font-size: 14px; }
+
+  /* Refresh button + last-updated still appear (now under the title row) */
   .btn-refresh {
     padding: 7px 16px; background: rgba(255,255,255,0.1); color: #fff;
     border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
@@ -96,7 +145,7 @@
     cursor: pointer; transition: background 0.15s;
   }
   .btn-refresh:hover { background: rgba(255,255,255,0.18); }
-  .last-updated { font-size: 11px; color: rgba(255,255,255,0.4); }
+  .last-updated { display: none; }
 
   /* ── TABS ── */
   .tab-bar {
@@ -381,17 +430,60 @@
 </div>
 
 <!-- ── HEADER ── -->
-<div class="header">
-  <div>
-    <div class="header-brand">FootJoy</div>
-    <div class="header-title">Sales Dashboard — AW27</div>
+<header class="header">
+  <div class="header-inner">
+    <div class="fj-logo">
+      <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" class="fj-logo-img">
+    </div>
+    <div class="header-title">Dashboard</div>
+    <div class="header-actions">
+      <span class="header-curate-mark" aria-hidden="true">
+        <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
+      </span>
+      <button class="header-menu-btn" id="header-menu-btn" type="button"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="header-menu"
+              aria-label="Open menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <line x1="4" y1="7"  x2="20" y2="7"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <!-- Hidden buttons retained so existing code that references them by id keeps working. -->
+      <button id="btn-sign-out" type="button" hidden>Sign out</button>
+      <button id="btn-refresh-load" type="button" hidden>Refresh</button>
+    </div>
   </div>
-  <div class="header-right">
-    <span class="last-updated" id="last-updated"></span>
-    <button class="btn-refresh" id="btn-refresh-load">↺ Refresh</button>
-    <button class="btn-refresh" id="btn-sign-out" style="border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.6)">Sign Out</button>
+
+  <!-- Header menu dropdown -->
+  <div class="header-menu" id="header-menu" role="menu" aria-labelledby="header-menu-btn" hidden>
+    <div class="header-menu-profile">
+      <div class="header-menu-profile-name" id="header-menu-profile-name">Signed in</div>
+      <div class="header-menu-profile-email" id="header-menu-profile-email">-</div>
+    </div>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-dash-menu="home">
+      <span class="header-menu-icon">&larr;</span>
+      <span>Return to home</span>
+    </button>
+    <button class="header-menu-item" role="menuitem" type="button" data-dash-menu="refresh">
+      <span class="header-menu-icon">&#8635;</span>
+      <span>Refresh</span>
+    </button>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-dash-menu="signout">
+      <span class="header-menu-icon">&#9099;</span>
+      <span>Sign out</span>
+    </button>
   </div>
-</div>
+</header>
+
+<!-- last-updated text is no longer rendered, but the element id is kept
+     hidden so existing code (loadAll) can still write to it without
+     erroring. -->
+<span id="last-updated" hidden></span>
 
 <!-- ── TAB BAR ── -->
 <div class="tab-bar">
