@@ -2073,6 +2073,241 @@
   .dash-appt-meta { font-size: 11px; color: #6b7280; margin-top: 1px; }
   .dash-appt-time { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; color: #0a1834; text-align: right; }
   .dash-appt-time small { display: block; font-size: 10px; color: #6b7280; font-weight: 500; letter-spacing: 0; }
+  .sign-out-btn {
+    position: absolute; top: 24px; right: 28px;
+    background: none; border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5); font-size: 12px; padding: 8px 18px;
+    border-radius: 8px; cursor: pointer; letter-spacing: 0.5px;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .sign-out-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
+  .season-landing-logo {
+    width: 140px; height: auto; margin-bottom: 12px;
+  }
+  .season-landing-title {
+    font-family: 'Playfair Display', serif;
+    color: #fff; font-size: 28px; font-weight: 400;
+    letter-spacing: 1px; margin-bottom: 6px;
+  }
+  .season-landing-subtitle {
+    color: rgba(255,255,255,0.4); font-size: 13px;
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 48px;
+  }
+  .season-cards {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    justify-content: center; max-width: 1000px;
+    width: 100%;
+  }
+  .season-card {
+    background: #111827; border-radius: 16px;
+    width: 280px; overflow: hidden;
+    cursor: pointer; transition: transform 0.25s, box-shadow 0.25s;
+    border: 1px solid rgba(255,255,255,0.06);
+    position: relative;
+  }
+  .season-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    border-color: rgba(255,255,255,0.12);
+  }
+  .season-card-image {
+    width: 100%; height: 200px; object-fit: cover;
+    display: block;
+  }
+  .season-card-body {
+    padding: 20px 22px 24px;
+  }
+  .season-card-name {
+    font-family: 'Playfair Display', serif;
+    color: #fff; font-size: 20px; font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .season-card-category {
+    color: rgba(255,255,255,0.4); font-size: 11px;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .season-card-meta {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .season-meta-row {
+    display: flex; justify-content: space-between;
+    align-items: center;
+  }
+  .season-meta-label {
+    color: rgba(255,255,255,0.35); font-size: 11px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .season-meta-value {
+    color: rgba(255,255,255,0.8); font-size: 13px;
+    font-weight: 600;
+  }
+  .season-card-status {
+    position: absolute; top: 14px; right: 14px;
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .season-status-active {
+    background: rgba(16,185,129,0.2); color: #10b981;
+  }
+  .season-status-closed {
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.35);
+  }
+  .season-card-drafts {
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .season-draft-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #f59e0b; font-size: 12px; font-weight: 600;
+  }
+  .season-draft-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #f59e0b; display: inline-block;
+  }
+  .season-card-enter {
+    margin-top: 16px;
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; color: rgba(255,255,255,0.5); font-size: 12px;
+    letter-spacing: 0.5px; transition: color 0.2s;
+  }
+  .season-card:hover .season-card-enter { color: #fff; }
+
+  /* Draft list expand */
+  .season-draft-toggle {
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; user-select: none;
+    padding: 0; background: none; border: none;
+    color: #f59e0b; font-size: 12px; font-weight: 600;
+    font-family: inherit;
+  }
+  .season-draft-toggle:hover { color: #fbbf24; }
+  .season-draft-arrow {
+    display: inline-block; transition: transform 0.2s;
+    font-size: 10px;
+  }
+  .season-draft-arrow.open { transform: rotate(90deg); }
+  .season-draft-list {
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.3s ease;
+    margin-top: 0;
+  }
+  .season-draft-list.open {
+    max-height: 500px;
+    margin-top: 10px;
+  }
+  .season-draft-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    gap: 8px;
+  }
+  .season-draft-item:last-child { border-bottom: none; }
+  .season-draft-info {
+    flex: 1; min-width: 0; cursor: pointer;
+  }
+  .season-draft-info:hover .season-draft-acct { color: #fff; }
+  .season-draft-acct {
+    color: rgba(255,255,255,0.75); font-size: 12px;
+    font-weight: 600; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    transition: color 0.15s;
+  }
+  .season-draft-detail {
+    color: rgba(255,255,255,0.3); font-size: 10px;
+    margin-top: 2px;
+  }
+  .season-draft-delete {
+    flex-shrink: 0; width: 24px; height: 24px;
+    border-radius: 6px; border: none;
+    background: rgba(239,68,68,0.1); color: #ef4444;
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .season-draft-delete:hover {
+    background: rgba(239,68,68,0.25);
+  }
+
+  /* ── BOOKING DIARY CARD (on season landing) ── */
+  .diary-card {
+    margin-top: 40px;
+    width: 100%;
+    max-width: 720px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: background 0.18s, border-color 0.18s;
+    flex-shrink: 0;
+  }
+  .diary-card:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.18);
+  }
+  .diary-head {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 22px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .diary-head-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(200,168,75,0.18); color: #c8a84b;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .diary-head-text { flex: 1; color: rgba(255,255,255,0.92); }
+  .diary-head-title {
+    font-size: 14px; font-weight: 700; margin-bottom: 2px; letter-spacing: 0.02em;
+  }
+  .diary-head-sub {
+    font-size: 11px; color: rgba(255,255,255,0.45); letter-spacing: 0.04em;
+  }
+  .diary-head-cta {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 18px; background: #c8a84b; color: #0a0f1a;
+    border-radius: 4px; font-size: 12px; font-weight: 800;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    text-decoration: none; transition: background 0.18s;
+  }
+  .diary-head-cta:hover { background: #d4b760; }
+  .diary-head-cta .arrow { font-size: 16px; line-height: 1; transform: translateY(-1px); }
+  .diary-list { list-style: none; margin: 0; padding: 4px 0; }
+  .diary-list li {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 1.1fr;
+    align-items: center;
+    gap: 16px; padding: 12px 22px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 12px;
+  }
+  .diary-list li:last-child { border-bottom: none; }
+  .diary-when { display: flex; flex-direction: column; gap: 2px; }
+  .diary-when .day {
+    color: #c8a84b; font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 700;
+  }
+  .diary-when .time {
+    color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 700;
+  }
+  .diary-person {
+    color: rgba(255,255,255,0.95); font-size: 13px; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .diary-account {
+    color: rgba(255,255,255,0.65); font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .diary-location {
+    color: rgba(255,255,255,0.55); font-size: 11px; letter-spacing: 0.02em;
+    display: inline-flex; align-items: center; gap: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .diary-location svg { width: 11px; height: 11px; flex-shrink: 0; opacity: 0.7; }
+  .diary-empty {
+    padding: 22px; text-align: center; color: rgba(255,255,255,0.4);
+    font-size: 12px; letter-spacing: 0.04em;
+  }
 
   /* Delete confirmation overlay */
   .draft-delete-overlay {
@@ -2348,6 +2583,22 @@
     line-height: 1 !important;
   }
 
+  .season-landing-title,
+  .season-landing-subtitle,
+  .season-card-name,
+  .season-card-category,
+  .season-meta-label,
+  .season-meta-value,
+  .season-card-status,
+  .season-card-enter { line-height: 1.15 !important; }
+  .season-card-status,
+  .season-draft-badge,
+  .season-draft-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    line-height: 1 !important;
+  }
+
   #login-title { line-height: 1.4 !important; }
 
   .toast-notification {
@@ -2403,6 +2654,7 @@
   }
 
   .ci-tier-badge { padding: 9px 12px 5px 12px !important; }
+  .season-card-status { padding: 6px 12px 2px 12px !important; }
 
   .header-title h1 { padding-top: 2px !important; }
   .fj-logo-text { padding-top: 2px !important; }

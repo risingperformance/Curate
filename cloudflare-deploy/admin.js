@@ -88,6 +88,13 @@ const TABLES = {
     orderBy: 'program_key,sort_order',
     bulkOrderable: true,
   },
+  milestones: {
+    label: 'Milestones',
+    pk: 'id',
+    rowKey: 'id',
+    orderBy: 'milestone_date',
+    bulkOrderable: false,
+  },
 };
 
 const IMAGE_BUCKETS = [
@@ -119,7 +126,7 @@ const SECTIONS = {
   settings: {
     label: 'Settings',
     defaultTab: 'salespeople',
-    tabs: ['salespeople', 'images'],
+    tabs: ['salespeople', 'milestones', 'images'],
   },
 };
 
@@ -153,6 +160,7 @@ const TAB_SLUGS_BY_SECTION = {
   },
   settings: {
     'users':            'salespeople',
+    'milestones':       'milestones',
     'brand-assets':     'images',
   },
 };

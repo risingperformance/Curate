@@ -187,88 +187,13 @@ function escapeAttr(str) { return escapeHtml(String(str)).replace(/"/g, '&quot;'
 
 const SEASONAL_IMG_BASE = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/seasonal-images/season-';
 
-async function renderBookingDiaryCard() {
-  const card    = document.getElementById('diary-card');
-  const subEl   = document.getElementById('diary-head-sub');
-  const ctaEl   = document.getElementById('diary-head-cta');
-  const listEl  = document.getElementById('diary-list');
-  if (!card || !subEl || !listEl) return;
-
-  const cu = window.currentUser || {};
-  const isAdminUser = (cu.role === 'admin');
-  const myName  = (cu.name  || '').trim();
-  const myEmail = (cu.email || '').trim();
-
-  // Signal to diary that we're coming from prebook (session-based auth,
-  // no credentials in URL). Supabase Auth session is shared via localStorage.
-  ctaEl.href = 'appointment-diary.html?from=prebook';
-
-  // Pull upcoming bookings for this AM (or all bookings if admin)
-  const todayIso = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  let q = supa
-    .from('appointment_bookings')
-    .select('*')
-    .gte('date', todayIso)
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true })
-    .limit(5);
-  if (!isAdminUser && myName) q = q.eq('am_name', myName);
-
-  const { data: bookings, error } = await q;
-
-  if (error) {
-    subEl.textContent = 'No upcoming appointments scheduled';
-    listEl.innerHTML = '';
-    return;
-  }
-
-  if (!bookings || bookings.length === 0) {
-    subEl.textContent = isAdminUser
-      ? 'No upcoming appointments across the team'
-      : 'No upcoming appointments scheduled';
-    listEl.innerHTML = '';
-    return;
-  }
-
-  subEl.textContent = bookings.length + ' upcoming retailer appointment' + (bookings.length === 1 ? '' : 's');
-
-  const fmtDay = iso => new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
-  const fmtTime = t => {
-    if (!t) return '';
-    const [h, m] = t.split(':');
-    const hr = parseInt(h, 10);
-    const ampm = hr >= 12 ? 'PM' : 'AM';
-    const hh = ((hr + 11) % 12) + 1;
-    return hh + ':' + (m || '00') + ' ' + ampm;
-  };
-  const esc = s => String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-  listEl.innerHTML = bookings.map(b => {
-    const person   = b.contact_name || b.customer_contact || b.contact_first || 'Customer';
-    const account  = b.account_name || b.customer_name || '—';
-    const location = b.location || b.meeting_location || (b.location_type === 'onsite' ? 'On-site' : 'Showroom');
-    return `
-      <li>
-        <div class="diary-when"><span class="day">${esc(fmtDay(b.date))}</span><span class="time">${esc(fmtTime(b.start_time))}</span></div>
-        <div class="diary-person">${esc(person)}</div>
-        <div class="diary-account">${esc(account)}</div>
-        <div class="diary-location">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          ${esc(location)}
-        </div>
-      </li>
-    `;
-  }).join('');
-}
+// renderBookingDiaryCard removed: the dashboard layout uses the
+// "Next 5 Appointments" panel instead, populated by fetchNextAppointments
+// in loadDashboardSideData.
 
 async function showSeasonLanding() {
   const landing = document.getElementById('season-landing');
   landing.style.display = 'flex';
-
-  // Render the booking diary card (uses currentUser if available)
-  renderBookingDiaryCard();
 
   // Fetch active seasons (both apparel and footwear show on the landing;
   // footwear cards route to the footwear form when selected)
@@ -349,64 +274,293 @@ async function showSeasonLanding() {
     });
   });
 
+  // Greeting name from currentUser if available
+  const cuName = (window.currentUser && window.currentUser.name) || '';
+  const greetEl = document.getElementById('dash-greeting-name');
+  if (greetEl) greetEl.textContent = cuName ? `Welcome back, ${cuName.split(' ')[0]}.` : 'Welcome back.';
+
+  // Render season cards (dashboard layout: drafts in an accordion, two
+  // action buttons per card)
   const container = document.getElementById('season-cards-container');
   container.innerHTML = seasons.map(s => {
     const isActive = s.status === 'active';
-    const statusClass = isActive ? 'season-status-active' : 'season-status-closed';
-    const statusLabel = isActive ? 'Open' : 'Closed';
+    const tagLabel = isActive ? 'Open' : 'Closed';
+    const tagCls = isActive ? '' : 'dash-scard-tag-closed';
     const imgUrl = SEASONAL_IMG_BASE + encodeURIComponent(s.season_id) + '.jpg';
     const seasonDrafts = draftsBySeason[s.season_id] || [];
     const dc = seasonDrafts.length;
-    const endDate = s.end_date ? new Date(s.end_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-    const sid = s.season_id.replace(/'/g, "\\'");
+    const sid = s.season_id;
 
-    let draftsHtml = '';
-    if (dc > 0) {
-      const listItems = seasonDrafts.map(d => {
-        const mod = d.modified ? new Date(d.modified).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
-        return `
-          <div class="season-draft-item">
-            <div class="season-draft-info" data-action="openDraftFromLanding" data-token="${d.token}" data-category="${escapeAttr(d.category || 'apparel')}">
-              <div class="season-draft-acct">${escapeHtml(d.account)}</div>
-              <div class="season-draft-detail">${d.units} units &middot; ${mod}</div>
-            </div>
-            <button class="season-draft-delete" data-action="confirmDeleteDraft" data-token="${d.token}" data-account="${escapeAttr(d.account)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Delete draft">&times;</button>
-          </div>`;
-      }).join('');
+    const draftRows = seasonDrafts.length
+      ? seasonDrafts.map(d => {
+          const mod = d.modified ? new Date(d.modified).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+          return `
+            <div class="dash-draft-row" data-action="openDraftFromLanding" data-token="${escapeAttr(d.token)}" data-category="${escapeAttr(d.category || 'apparel')}">
+              <div>
+                <div class="dash-draft-name">${escapeHtml(d.account)}</div>
+                <div class="dash-draft-meta">Last edited ${mod}</div>
+              </div>
+              <div class="dash-draft-units">${d.units} units</div>
+              <button class="dash-draft-del" data-action="confirmDeleteDraft" data-token="${escapeAttr(d.token)}" data-account="${escapeAttr(d.account)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Delete draft">&times;</button>
+            </div>`;
+        }).join('')
+      : '<div class="dash-drafts-empty">No drafts yet for this season.</div>';
 
-      draftsHtml = `
-        <div class="season-card-drafts">
-          <button class="season-draft-toggle" data-action="toggleDraftList" data-id="${sid}">
-            <span class="season-draft-dot"></span>
-            ${dc} draft${dc > 1 ? 's' : ''} in progress
-            <span class="season-draft-arrow" id="draft-arrow-${sid}">&#9656;</span>
-          </button>
-          <div class="season-draft-list" id="draft-list-${sid}">
-            ${listItems}
-          </div>
-        </div>`;
-    }
+    const newOrderAction = isActive
+      ? `data-action="selectSeason" data-id="${escapeAttr(sid)}" data-category="${escapeAttr(s.category || 'apparel')}"`
+      : 'disabled';
 
     return `
-      <div class="season-card${isActive ? '' : ' season-closed'}" ${isActive ? `data-action="selectSeason" data-id="${sid}" data-category="${escapeAttr(s.category || 'apparel')}"` : ''}>
-        <div class="season-card-status ${statusClass}">${statusLabel}</div>
-        <img class="season-card-image" src="${imgUrl}" alt="${escapeAttr(s.season_name)}" data-img-fallback="season" />
-        <div class="season-card-body">
-          <div class="season-card-name">${escapeHtml(s.season_name)}</div>
-          <div class="season-card-category">${escapeHtml(s.category || 'Apparel')}</div>
-          <div class="season-card-meta">
-            <div class="season-meta-row">
-              <span class="season-meta-label">Closes</span>
-              <span class="season-meta-value">${endDate}</span>
+      <article class="dash-scard" id="dash-scard-${escapeAttr(sid)}">
+        <div class="dash-scard-head">
+          <div class="dash-scard-img" style="background-image:url('${escapeAttr(imgUrl)}')"></div>
+          <div class="dash-scard-body">
+            <span class="dash-scard-tag ${tagCls}">${tagLabel}</span>
+            <div class="dash-scard-title">${escapeHtml(s.season_name)}</div>
+            <div class="dash-scard-actions">
+              <button class="dash-scard-btn dash-scard-btn-secondary" data-action="toggleDashDrafts" data-id="${escapeAttr(sid)}" type="button">
+                Drafts <span class="count">${dc}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button class="dash-scard-btn dash-scard-btn-primary" type="button" ${newOrderAction}>
+                + New order
+              </button>
             </div>
           </div>
-          ${draftsHtml}
-          ${isActive ? '<div class="season-card-enter">Open prebook &rarr;</div>' : '<div class="season-card-enter" style="opacity:0.3">Season closed</div>'}
         </div>
-      </div>
+        <div class="dash-scard-drafts">
+          <div class="dash-scard-drafts-header">
+            <span>Drafts in progress</span>
+          </div>
+          ${draftRows}
+        </div>
+      </article>
     `;
   }).join('');
+
+  // Kick off side data loads (don't block landing render on them)
+  loadDashboardSideData();
 }
+
+// ── Dashboard side data: stats, top products, appointments ──────────────────
+async function loadDashboardSideData() {
+  // Resolve open apparel + footwear seasons (the stats reference these)
+  const openSeasons = (await supa.from('seasons')
+    .select('season_id, category')
+    .eq('status', 'active')).data || [];
+  const openApparelSeason  = (openSeasons.find(s => s.category === 'apparel')  || {}).season_id || null;
+  const openFootwearSeason = (openSeasons.find(s => s.category === 'footwear') || {}).season_id || null;
+
+  // Fire requests in parallel
+  const [apptsRes, fwOrdersRes, apOrdersRes, topProductsRes, appt5Res, milestoneRes] = await Promise.all([
+    appointmentsThisWeek(),
+    countSubmittedFootwearOrders(openFootwearSeason),
+    countSubmittedApparelOrders(openApparelSeason),
+    fetchTopProducts(openApparelSeason, openFootwearSeason),
+    fetchNextAppointments(5),
+    fetchNextMilestone()
+  ]);
+
+  // Stats
+  setText('stat-appts', apptsRes.count);
+  setText('stat-appts-sub', apptsRes.sub);
+  setText('stat-fw-orders', fwOrdersRes.count);
+  setText('stat-fw-orders-sub', fwOrdersRes.sub);
+  setText('stat-ap-orders', apOrdersRes.count);
+  setText('stat-ap-orders-sub', apOrdersRes.sub);
+  renderNextMilestone(milestoneRes);
+
+  // Top products: server-side RPC returns rows already aggregated and
+  // ranked. Re-shape into the { apparel: [], footwear: [] } shape the
+  // renderer expects.
+  window._dashTopProducts = { apparel: [], footwear: [] };
+  (topProductsRes || []).forEach(r => {
+    const list = window._dashTopProducts[r.category];
+    if (!list) return;
+    list.push({
+      name:  r.product_name || '(unnamed)',
+      sub:   r.colour || '',
+      sku:   r.sku || '',
+      units: Number(r.units || 0)
+    });
+  });
+  renderTopProducts('apparel');
+
+  // Appointments
+  renderNextAppointments(appt5Res);
+}
+
+async function appointmentsThisWeek() {
+  const today = new Date();
+  const weekStart = new Date(today); weekStart.setHours(0,0,0,0);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7);
+  const res = await supa.from('appointment_bookings')
+    .select('id', { count: 'exact', head: true })
+    .gte('date', weekStart.toISOString().slice(0, 10))
+    .lt('date',  weekEnd.toISOString().slice(0, 10));
+  return { count: res.count || 0, sub: 'Across the team' };
+}
+
+async function countSubmittedFootwearOrders(seasonId) {
+  if (!seasonId) return { count: 0, sub: 'No open footwear season' };
+  // footwear_drafts.status = 'submitted' marks a confirmed order
+  const res = await supa.from('footwear_drafts')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId)
+    .eq('status', 'submitted');
+  return { count: res.count || 0, sub: seasonId + ' season' };
+}
+
+async function countSubmittedApparelOrders(seasonId) {
+  if (!seasonId) return { count: 0, sub: 'No open apparel season' };
+  // The apparel form writes confirmed orders to the orders table.
+  const res = await supa.from('orders')
+    .select('order_id', { count: 'exact', head: true })
+    .eq('season_id', seasonId);
+  return { count: res.count || 0, sub: seasonId + ' season' };
+}
+
+// Server-side aggregation via the get_top_products_by_season RPC.
+// Returns rows: { category, rank, sku, product_name, colour, units }.
+// Falls back to an empty array on RPC failure so the panel just renders
+// the "No submitted orders yet" empty state instead of breaking.
+async function fetchTopProducts(openApparelSeason, openFootwearSeason) {
+  if (!openApparelSeason && !openFootwearSeason) return [];
+  const res = await supa.rpc('get_top_products_by_season', {
+    p_apparel_season:  openApparelSeason  || '__none__',
+    p_footwear_season: openFootwearSeason || '__none__',
+    p_limit:           10
+  });
+  if (res.error) {
+    console.warn('Top products RPC failed:', res.error);
+    return [];
+  }
+  return res.data || [];
+}
+
+function renderTopProducts(cat) {
+  const list = document.getElementById('prod-list');
+  if (!list) return;
+  const top = (window._dashTopProducts && window._dashTopProducts[cat]) || [];
+  if (!top.length) {
+    list.innerHTML = '<div class="dash-empty">No submitted orders yet.</div>';
+    return;
+  }
+  const PRODUCT_IMG_BASE = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/product-images/';
+  list.innerHTML = top.map((p, i) => {
+    const imgUrl = p.sku ? PRODUCT_IMG_BASE + 'FJ_' + encodeURIComponent(p.sku) + '_01.jpg' : '';
+    return `
+    <div class="dash-prow">
+      <div class="dash-prank">${i + 1}</div>
+      <div class="dash-pthumb">
+        ${imgUrl ? `<img src="${escapeAttr(imgUrl)}" alt="" data-img-fallback="product">` : ''}
+      </div>
+      <div>
+        <div class="dash-pname">${escapeHtml(p.name || '(unnamed)')}</div>
+        <div class="dash-psub">${p.sub ? escapeHtml(p.sub) + ' &middot; ' : ''}SKU ${escapeHtml(p.sku || '-')}</div>
+      </div>
+      <div class="dash-punits">${p.units.toLocaleString()}<small>Units</small></div>
+    </div>`;
+  }).join('');
+}
+
+async function fetchNextAppointments(n) {
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await supa.from('appointment_bookings')
+    .select('id, date, start_time, end_time, customer_name, am_name, location')
+    .gte('date', today)
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true })
+    .limit(n);
+  return res.data || [];
+}
+
+function renderNextAppointments(rows) {
+  const el = document.getElementById('appts-list');
+  if (!el) return;
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="dash-empty">No upcoming appointments.</div>';
+    return;
+  }
+  const fmtDay = d => new Date(d).toLocaleDateString('en-AU', { day: '2-digit' });
+  const fmtMon = d => new Date(d).toLocaleDateString('en-AU', { month: 'short' });
+  const fmtTime = t => {
+    if (!t) return '';
+    const [h, m] = t.split(':');
+    const hh = parseInt(h, 10);
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const hh12 = ((hh + 11) % 12) + 1;
+    return hh12 + ':' + m + ' ' + ampm;
+  };
+  el.innerHTML = rows.map(r => `
+    <div class="dash-appt">
+      <div class="dash-appt-date">
+        <div class="dash-appt-day">${fmtDay(r.date)}</div>
+        <div class="dash-appt-month">${fmtMon(r.date)}</div>
+      </div>
+      <div>
+        <div class="dash-appt-name">${escapeHtml(r.customer_name || '-')}</div>
+        <div class="dash-appt-meta">${escapeHtml(r.am_name || '')}${r.location ? ' &middot; ' + escapeHtml(r.location) : ''}</div>
+      </div>
+      <div class="dash-appt-time">${fmtTime(r.start_time)}<small>${escapeHtml(r.location || '')}</small></div>
+    </div>`).join('');
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+// ── Next milestone (admin-managed) ─────────────────────────────────────────
+async function fetchNextMilestone() {
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await supa.from('milestones')
+    .select('milestone_date, title, description, season_id')
+    .eq('status', 'active')
+    .gte('milestone_date', today)
+    .order('milestone_date', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (res && res.data) || null;
+}
+
+function renderNextMilestone(m) {
+  if (!m) {
+    setText('stat-milestone', 'Coming soon');
+    setText('stat-milestone-sub', 'Set a milestone in Admin / Settings to highlight an upcoming deadline.');
+    return;
+  }
+  setText('stat-milestone', m.title || '(untitled milestone)');
+  const dateStr = m.milestone_date
+    ? new Date(m.milestone_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+  // Days remaining
+  let daysLine = '';
+  if (m.milestone_date) {
+    const diffMs = new Date(m.milestone_date) - new Date(new Date().toISOString().slice(0, 10));
+    const days = Math.max(0, Math.round(diffMs / 86400000));
+    if (days === 0) daysLine = ' · Today';
+    else if (days === 1) daysLine = ' · Tomorrow';
+    else daysLine = ' · ' + days + ' days to go';
+  }
+  const descLine = m.description ? m.description : 'Submit by ' + dateStr;
+  setText('stat-milestone-sub', descLine + (daysLine ? daysLine : (dateStr && !m.description ? '' : ' · ' + dateStr)));
+}
+
+// Toggle the dash season card's drafts accordion.
+function toggleDashDrafts(seasonId) {
+  const card = document.getElementById('dash-scard-' + seasonId);
+  if (card) card.classList.toggle('open');
+}
+
+// Apparel / Footwear toggle for the Top 10 Products panel.
+document.addEventListener('click', function (ev) {
+  const btn = ev.target.closest('#prod-toggle button[data-cat]');
+  if (!btn) return;
+  document.querySelectorAll('#prod-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTopProducts(btn.dataset.cat);
+});
 
 function toggleDraftList(seasonId) {
   const list = document.getElementById('draft-list-' + seasonId);
@@ -491,6 +645,7 @@ document.addEventListener('click', function(e) {
 
   if      (a === 'openDraftFromLanding')    openDraftFromLanding(el.dataset.token, el.dataset.category);
   else if (a === 'confirmDeleteDraft')      confirmDeleteDraft(el.dataset.token, el.dataset.account, el.dataset.category);
+  else if (a === 'toggleDashDrafts')        toggleDashDrafts(el.dataset.id);
   else if (a === 'toggleDraftList')         toggleDraftList(el.dataset.id);
   else if (a === 'selectSeason')            selectSeason(el.dataset.id, el.dataset.category);
   else if (a === 'executeDraftDelete')      executeDraftDelete(el.dataset.token, el);
