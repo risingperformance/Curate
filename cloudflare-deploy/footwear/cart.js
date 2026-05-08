@@ -664,15 +664,6 @@
       return;
     }
 
-    // Get the auth token to attach as Authorization. Edge functions
-    // protected with verify_jwt require this. Falls back to the
-    // publishable/anon key when no session token is available
-    // (mirrors the apparel form's pattern).
-    var session = await c.supa.auth.getSession();
-    var sessionToken = session && session.data && session.data.session && session.data.session.access_token;
-    var anonKey = (window.__SUPABASE_CONFIG && window.__SUPABASE_CONFIG.key) || '';
-    var token   = sessionToken || anonKey;
-
     // Build the email payload. We share the apparel form's send-order-email
     // edge function which expects { subject, html } and forwards to Brevo.
     var customer = c.state.customer || {};
@@ -681,19 +672,24 @@
                  + ' — ' + new Date().toLocaleDateString('en-AU');
     var html     = buildFootwearOrderEmailHtml(c);
 
+    // Use the Supabase client's invoke() so it handles the Authorization
+    // header correctly across legacy anon JWT and new publishable key
+    // formats. invoke returns { data, error } and surfaces non-2xx as
+    // an error with .context (the original Response).
     var emailRes;
     try {
-      var resp = await fetch(c.EMAIL_EDGE_FN, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': 'Bearer ' + token,
-        },
-        body: JSON.stringify({ subject: subject, html: html }),
+      var inv = await c.supa.functions.invoke('send-order-email', {
+        body: { subject: subject, html: html },
       });
-      var bodyText = '';
-      try { bodyText = await resp.text(); } catch (e) { /* ignore */ }
-      emailRes = { ok: resp.ok, status: resp.status, body: bodyText };
+      if (inv.error) {
+        var status = (inv.error.context && inv.error.context.status) || 0;
+        var bodyText = '';
+        try { bodyText = inv.error.context && (await inv.error.context.text()); }
+        catch (e) { /* ignore */ }
+        emailRes = { ok: false, status: status, body: bodyText || inv.error.message };
+      } else {
+        emailRes = { ok: true, status: 200, body: '' };
+      }
     } catch (e) {
       emailRes = { ok: false, status: 0, body: (e && e.message) || 'Network error' };
     }
