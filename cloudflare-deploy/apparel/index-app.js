@@ -474,9 +474,16 @@ async function saveDraftInPlace(btnEl) {
   if (!cmakey) { showToast('Please select a customer first.', true); return; }
   if (!hasOrderChanges()) { showToast('No items to save.', true); return; }
 
-  const origText = btnEl.textContent;
-  btnEl.textContent = '💾 Saving...';
-  btnEl.disabled = true;
+  // Header menu items contain icon + label spans; mutating textContent
+  // would destroy that structure. The toast at the end provides
+  // feedback in either case, so for menu items we skip the inline
+  // spinner and just disable the button.
+  const isMenuItem = !!(btnEl && btnEl.classList && btnEl.classList.contains('header-menu-item'));
+  const origText   = isMenuItem ? null : (btnEl ? btnEl.textContent : null);
+  if (btnEl) {
+    if (!isMenuItem) btnEl.textContent = '💾 Saving...';
+    btnEl.disabled = true;
+  }
 
   const rec = CUSTOMER_DB.find(r => r.cmakey === cmakey);
   const accountName = rec?.customer || accountInput?.value || 'Customer';
@@ -509,8 +516,10 @@ async function saveDraftInPlace(btnEl) {
     }));
   }
 
-  btnEl.textContent = origText;
-  btnEl.disabled = false;
+  if (btnEl) {
+    if (!isMenuItem && origText !== null) btnEl.textContent = origText;
+    btnEl.disabled = false;
+  }
 
   if (error) {
     showToast('Failed to save draft. Please try again.', true);
@@ -526,20 +535,13 @@ function discardAndExit() {
 }
 
 function exitToLanding() {
-  // Reset order state
+  // The season landing now lives at the root /index.html (the apparel
+  // form is a subpage under /apparel/). Bouncing back to root takes the
+  // user to the season picker, where draft counts are also refreshed.
+  // Reset order state in case the browser caches the form page on
+  // history-back, so a return visit starts clean.
   orderData = {};
-  updateUI();
-
-  // Hide form, show landing
-  document.getElementById('app-header').style.display = 'none';
-  document.getElementById('app-main').style.display = 'none';
-  document.getElementById('app-footer').style.display = 'none';
-
-  const landing = document.getElementById('season-landing');
-  landing.classList.remove('fade-out');
-  landing.style.display = 'flex';
-  // Refresh the landing page (to show updated draft counts)
-  showSeasonLanding();
+  window.location.assign('../index.html');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3513,13 +3515,14 @@ function loadDraftOrder(draftRow) {
     const privFooter = document.getElementById('privacy-footer');
     if (privFooter) privFooter.style.display = 'block';
 
-    // 3. Hide Share, Fullscreen, and Clear (not relevant for customers)
-    const shareBtn = document.getElementById('btn-share-draft');
-    if (shareBtn) shareBtn.classList.add('force-hidden');
+    // 3. Hide Fullscreen + the entire hamburger menu (Share / Clear /
+    //    Sign out / Customer Insight / Back to season picker are all
+    //    rep-only). Customers can still save changes via the on-page
+    //    save button rendered by the customer-mode flow.
     const fsBtn = document.getElementById('btn-fullscreen');
     if (fsBtn) fsBtn.classList.add('force-hidden');
-    const clearBtn = document.getElementById('btn-clear-all');
-    if (clearBtn) clearBtn.classList.add('force-hidden');
+    const menuBtn = document.getElementById('header-menu-btn');
+    if (menuBtn) menuBtn.classList.add('force-hidden');
 
     // 4. Hide Confirm & Submit in review modal (Save button added when modal opens)
     const confirmBtn = document.getElementById('btn-confirm-submit');
@@ -3530,6 +3533,49 @@ function loadDraftOrder(draftRow) {
 document.addEventListener('DOMContentLoaded', init);
 
 // ═══════════════════════════════════════════════
+// HEADER MENU (hamburger dropdown)
+// ═══════════════════════════════════════════════
+function toggleHeaderMenu() {
+  const menu = document.getElementById('header-menu');
+  const btn  = document.getElementById('header-menu-btn');
+  if (!menu || !btn) return;
+  const isHidden = menu.hidden;
+  if (isHidden) {
+    populateHeaderMenuProfile();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+function closeHeaderMenu() {
+  const menu = document.getElementById('header-menu');
+  const btn  = document.getElementById('header-menu-btn');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function populateHeaderMenuProfile() {
+  const u = window.currentUser || {};
+  const nameEl  = document.getElementById('header-menu-profile-name');
+  const emailEl = document.getElementById('header-menu-profile-email');
+  if (nameEl)  nameEl.textContent  = u.name || 'Signed in';
+  if (emailEl) emailEl.textContent = u.email || '-';
+}
+// Close on click outside the menu/trigger.
+document.addEventListener('click', function (ev) {
+  const menu = document.getElementById('header-menu');
+  if (!menu || menu.hidden) return;
+  if (ev.target.closest('#header-menu') || ev.target.closest('#header-menu-btn')) return;
+  closeHeaderMenu();
+});
+// Close on Escape.
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closeHeaderMenu();
+});
+
+// ═══════════════════════════════════════════════
 // EVENT DELEGATION (replaces inline onclick)
 // ═══════════════════════════════════════════════
 document.addEventListener('click', function(e) {
@@ -3537,9 +3583,14 @@ document.addEventListener('click', function(e) {
   if (!el) return;
   const a = el.dataset.action;
   // Actions that need stopPropagation
-  if (['openDraftFromLanding','confirmDeleteDraft','toggleDraftList','toggleSubsectionCresting'].includes(a)) e.stopPropagation();
+  if (['openDraftFromLanding','confirmDeleteDraft','toggleDraftList','toggleSubsectionCresting','toggleHeaderMenu'].includes(a)) e.stopPropagation();
 
-  if (a === 'openDraftFromLanding') openDraftFromLanding(el.dataset.token);
+  // Close the header menu after any item is clicked (except the toggle
+  // itself, which is handled below).
+  if (a !== 'toggleHeaderMenu') closeHeaderMenu();
+
+  if (a === 'toggleHeaderMenu') toggleHeaderMenu();
+  else if (a === 'openDraftFromLanding') openDraftFromLanding(el.dataset.token);
   else if (a === 'confirmDeleteDraft') confirmDeleteDraft(el.dataset.token, el.dataset.account);
   else if (a === 'toggleDraftList') toggleDraftList(el.dataset.id);
   else if (a === 'selectSeason') selectSeason(el.dataset.id, el.dataset.category);

@@ -50,12 +50,53 @@
       <h1>Footwear Prebook Order Form</h1>
     </div>
     <div class="header-actions">
-      <span id="header-user" class="header-user"></span>
-      <button id="signout-btn" class="btn-header-link" type="button">Sign out</button>
       <span class="header-curate-mark" aria-hidden="true">
         <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
       </span>
+      <button class="header-menu-btn" id="header-menu-btn" type="button"
+              data-fw-action="toggleHeaderMenu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="header-menu"
+              aria-label="Open menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <line x1="4" y1="7"  x2="20" y2="7"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <!-- Legacy invisible signout button retained so app.js's existing
+           addEventListener for #signout-btn keeps working. -->
+      <button id="signout-btn" type="button" hidden>Sign out</button>
+      <span id="header-user" class="header-user" hidden></span>
     </div>
+  </div>
+
+  <!-- Header menu dropdown. Hidden by default. -->
+  <div class="header-menu" id="header-menu" role="menu" aria-labelledby="header-menu-btn" hidden>
+    <div class="header-menu-profile">
+      <div class="header-menu-profile-name" id="header-menu-profile-name">Signed in</div>
+      <div class="header-menu-profile-email" id="header-menu-profile-email">-</div>
+    </div>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-fw-menu="back-to-seasons">
+      <span class="header-menu-icon">&larr;</span>
+      <span>Back to season picker</span>
+    </button>
+    <button class="header-menu-item" role="menuitem" type="button" data-fw-menu="save">
+      <span class="header-menu-icon">&#128190;</span>
+      <span>Save draft</span>
+    </button>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item header-menu-item-danger" role="menuitem" type="button" data-fw-menu="clear">
+      <span class="header-menu-icon">&#10005;</span>
+      <span>Clear order</span>
+    </button>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-fw-menu="sign-out">
+      <span class="header-menu-icon">&#9099;</span>
+      <span>Sign out</span>
+    </button>
   </div>
 </header>
 

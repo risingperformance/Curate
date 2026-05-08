@@ -284,26 +284,38 @@ async function showSeasonLanding() {
     return;
   }
 
-  // Fetch full draft data
-  const { data: drafts } = await supa
-    .from('draft_orders')
-    .select('*')
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
+  // Fetch apparel + footwear drafts in parallel. The two tables have
+  // different shapes (token vs share_token, order_data vs cart_items)
+  // so they're normalised into a single shape below.
+  const [apparelDraftsRes, footwearDraftsRes] = await Promise.all([
+    supa.from('draft_orders')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false }),
+    // footwear_drafts has no expires_at column. RLS limits SELECT to
+    // the rep's own drafts (created_by = auth.uid()) plus admins.
+    supa.from('footwear_drafts')
+        .select('*')
+        .eq('status', 'draft')
+        .order('created_at', { ascending: false })
+  ]);
 
-  // Filter drafts for the current user (admins / dev fallback see everything)
+  // Apparel needs JS-side filtering to the current user (RLS on
+  // draft_orders is open to all authenticated). Footwear is already
+  // filtered by RLS so we render whatever comes back.
   const cu = window.currentUser || {};
   const isAdminUser = (cu.role === 'admin');
   const myName = (cu.name || '').trim().toLowerCase();
-  const visibleDrafts = (drafts || []).filter(d => {
+  const visibleApparelDrafts = (apparelDraftsRes.data || []).filter(d => {
     if (isAdminUser) return true;
     const cd = d.customer_data || {};
     const am = (cd.manager || cd.account_manager || cd.am || cd.salesperson || '').trim().toLowerCase();
     return am && am === myName;
   });
+  const visibleFootwearDrafts = footwearDraftsRes.data || [];
 
   const draftsBySeason = {};
-  visibleDrafts.forEach(d => {
+  visibleApparelDrafts.forEach(d => {
     const sid = d.season_id || 'unknown';
     if (!draftsBySeason[sid]) draftsBySeason[sid] = [];
     const cd = d.customer_data || {};
@@ -315,7 +327,25 @@ async function showSeasonLanding() {
       token: d.token,
       account: cd.customer || cd.account_name || cd.account || 'Unnamed',
       units,
-      modified: d.created_at
+      modified: d.created_at,
+      category: 'apparel'
+    });
+  });
+  visibleFootwearDrafts.forEach(d => {
+    // footwear_drafts.season_id was added in May 2026; older rows were
+    // backfilled to 'AW27-shoe'. The fallback below covers any draft
+    // saved before that migration ran in case there's row drift.
+    const sid = d.season_id || 'AW27-shoe';
+    if (!draftsBySeason[sid]) draftsBySeason[sid] = [];
+    const cd = d.customer_data || {};
+    const items = Array.isArray(d.cart_items) ? d.cart_items : [];
+    const units = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+    draftsBySeason[sid].push({
+      token: d.share_token,
+      account: cd.account_name || cd.customer || cd.account || 'Unnamed',
+      units,
+      modified: d.created_at,
+      category: 'footwear'
     });
   });
 
@@ -336,11 +366,11 @@ async function showSeasonLanding() {
         const mod = d.modified ? new Date(d.modified).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
         return `
           <div class="season-draft-item">
-            <div class="season-draft-info" data-action="openDraftFromLanding" data-token="${d.token}">
+            <div class="season-draft-info" data-action="openDraftFromLanding" data-token="${d.token}" data-category="${escapeAttr(d.category || 'apparel')}">
               <div class="season-draft-acct">${escapeHtml(d.account)}</div>
               <div class="season-draft-detail">${d.units} units &middot; ${mod}</div>
             </div>
-            <button class="season-draft-delete" data-action="confirmDeleteDraft" data-token="${d.token}" data-account="${escapeAttr(d.account)}" title="Delete draft">&times;</button>
+            <button class="season-draft-delete" data-action="confirmDeleteDraft" data-token="${d.token}" data-account="${escapeAttr(d.account)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Delete draft">&times;</button>
           </div>`;
       }).join('');
 
@@ -385,14 +415,18 @@ function toggleDraftList(seasonId) {
   if (arrow) arrow.classList.toggle('open');
 }
 
-function openDraftFromLanding(token) {
-  // Navigate to the order form with the draft token, bypassing login
-  // Hash change on same page doesn't reload, so set hash then reload
-  window.location.hash = 'draft=' + encodeURIComponent(token) + '&from=dashboard';
-  window.location.reload();
+function openDraftFromLanding(token, category) {
+  // Each form lives in its own subfolder. The draft hash is the same
+  // shape (#draft=<token>) for both; each form looks up the token in
+  // its own table (draft_orders for apparel, footwear_drafts for
+  // footwear). Auth carries over via the shared Supabase session.
+  const target = (category || '').toLowerCase() === 'footwear'
+    ? 'footwear/index.html'
+    : 'apparel/index.html';
+  window.location.assign(target + '#draft=' + encodeURIComponent(token) + '&from=dashboard');
 }
 
-function confirmDeleteDraft(token, accountName) {
+function confirmDeleteDraft(token, accountName, category) {
   const overlay = document.createElement('div');
   overlay.className = 'draft-delete-overlay';
   overlay.innerHTML = `
@@ -401,7 +435,7 @@ function confirmDeleteDraft(token, accountName) {
       <p>Are you sure you want to delete the draft order for <strong style="color:#fff">${escapeHtml(accountName)}</strong>? This cannot be undone.</p>
       <div class="draft-delete-actions">
         <button class="btn-delete-cancel" data-action="closeDraftDeleteOverlay">Cancel</button>
-        <button class="btn-delete-confirm" data-action="executeDraftDelete" data-token="${token}">Delete</button>
+        <button class="btn-delete-confirm" data-action="executeDraftDelete" data-token="${token}" data-category="${escapeAttr(category || 'apparel')}">Delete</button>
       </div>
     </div>
   `;
@@ -411,7 +445,13 @@ function confirmDeleteDraft(token, accountName) {
 async function executeDraftDelete(token, btnEl) {
   btnEl.textContent = 'Deleting…';
   btnEl.disabled = true;
-  const { error } = await supa.from('draft_orders').delete().eq('token', token);
+  const category = (btnEl.dataset.category || 'apparel').toLowerCase();
+  let error;
+  if (category === 'footwear') {
+    ({ error } = await supa.from('footwear_drafts').delete().eq('share_token', token));
+  } else {
+    ({ error } = await supa.from('draft_orders').delete().eq('token', token));
+  }
   const overlay = btnEl.closest('.draft-delete-overlay');
   if (overlay) overlay.remove();
   if (error) {
@@ -449,8 +489,8 @@ document.addEventListener('click', function(e) {
     e.stopPropagation();
   }
 
-  if      (a === 'openDraftFromLanding')    openDraftFromLanding(el.dataset.token);
-  else if (a === 'confirmDeleteDraft')      confirmDeleteDraft(el.dataset.token, el.dataset.account);
+  if      (a === 'openDraftFromLanding')    openDraftFromLanding(el.dataset.token, el.dataset.category);
+  else if (a === 'confirmDeleteDraft')      confirmDeleteDraft(el.dataset.token, el.dataset.account, el.dataset.category);
   else if (a === 'toggleDraftList')         toggleDraftList(el.dataset.id);
   else if (a === 'selectSeason')            selectSeason(el.dataset.id, el.dataset.category);
   else if (a === 'executeDraftDelete')      executeDraftDelete(el.dataset.token, el);

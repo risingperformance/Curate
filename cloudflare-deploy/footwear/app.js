@@ -403,6 +403,26 @@
   // First call inserts a row (DB generates id and share_token via defaults);
   // subsequent calls update the same row by id. RLS lets the rep INSERT and
   // UPDATE only their own drafts (via created_by = auth.uid() in 0006).
+  //
+  // Dedupe rule (mirrors the apparel form): when starting a new draft for
+  // a customer who already has one for this season, delete the old draft
+  // before inserting. RLS scopes DELETE to the rep's own rows, so we only
+  // ever clear our own duplicates.
+  //
+  // Insert gate: a brand-new draft is only created once the rep has both
+  // (a) selected a customer and (b) added at least one unit to the cart.
+  // Updates to an existing draft are always allowed (so deleting items
+  // back to zero doesn't lose the draft, and submission status changes
+  // can flow regardless of cart state).
+  function canSaveDraft() {
+    var hasCustomer = !!(state.customer && state.customer.account_code);
+    var unitCount = (Array.isArray(state.cartItems) ? state.cartItems : [])
+      .reduce(function (sum, it) { return sum + (Number(it.quantity) || 0); }, 0);
+    if (!hasCustomer) return { ok: false, reason: 'no-customer' };
+    if (unitCount === 0) return { ok: false, reason: 'no-units' };
+    return { ok: true };
+  }
+
   async function persistDraft(updates) {
     if (state.activeDraftId) {
       var upRes = await supa
@@ -411,9 +431,35 @@
         .eq('id', state.activeDraftId);
       return { error: upRes.error };
     }
+
+    // INSERT path: silent no-op if the gate isn't satisfied. Returning
+    // an empty success keeps every caller's success path simple; the
+    // skipped flag is available to UI consumers that care (handleSave).
+    var gate = canSaveDraft();
+    if (!gate.ok) return { error: null, skipped: true, reason: gate.reason };
+
+    var seasonId    = state.seasonId || 'AW27-shoe';
+    var accountCode = state.customer && state.customer.account_code;
+    if (accountCode) {
+      // Sweep any prior drafts the rep has for this season + customer.
+      // Errors here are non-fatal (worst case, we end up with two drafts);
+      // the insert below proceeds either way.
+      try {
+        await supa.from('footwear_drafts')
+          .delete()
+          .eq('season_id', seasonId)
+          .eq('status', 'draft')
+          .filter('customer_data->>account_code', 'eq', accountCode);
+      } catch (e) { /* ignore */ }
+    }
+
     // First save -> insert. Don't pass created_by; the BEFORE trigger
-    // (footwear_drafts_audit) sets it to auth.uid().
-    var insertPayload = Object.assign({ status: 'draft' }, updates);
+    // (footwear_drafts_audit) sets it to auth.uid(). Tag the draft with
+    // the current season so the season-picker landing can bucket it.
+    var insertPayload = Object.assign(
+      { status: 'draft', season_id: seasonId },
+      updates
+    );
     var insRes = await supa
       .from('footwear_drafts')
       .insert(insertPayload)
@@ -432,6 +478,73 @@
   // signs out and navigates back to root.
   document.getElementById('signout-btn').addEventListener('click', signOut);
 
+  // ── Header hamburger menu ────────────────────────────────────────────────
+  function toggleHeaderMenu() {
+    var menu = document.getElementById('header-menu');
+    var btn  = document.getElementById('header-menu-btn');
+    if (!menu || !btn) return;
+    if (menu.hidden) {
+      // Populate profile fields from current user / customer.
+      var u = state.currentUser || {};
+      var nameEl  = document.getElementById('header-menu-profile-name');
+      var emailEl = document.getElementById('header-menu-profile-email');
+      if (nameEl)  nameEl.textContent  = u.name  || 'Signed in';
+      if (emailEl) emailEl.textContent = u.email || '-';
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    } else {
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  }
+  function closeHeaderMenu() {
+    var menu = document.getElementById('header-menu');
+    var btn  = document.getElementById('header-menu-btn');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  // Click handlers on the trigger and items.
+  var menuBtn = document.getElementById('header-menu-btn');
+  if (menuBtn) menuBtn.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    toggleHeaderMenu();
+  });
+  var menuEl = document.getElementById('header-menu');
+  if (menuEl) {
+    menuEl.querySelectorAll('[data-fw-menu]').forEach(function (item) {
+      item.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var act = item.getAttribute('data-fw-menu');
+        closeHeaderMenu();
+        if (act === 'back-to-seasons') {
+          window.location.assign('../index.html');
+        } else if (act === 'save') {
+          if (window.fwApp.cart && typeof window.fwApp.cart.handleSave === 'function') {
+            window.fwApp.cart.handleSave();
+          }
+        } else if (act === 'clear') {
+          if (window.fwApp.cart && typeof window.fwApp.cart.handleClear === 'function') {
+            window.fwApp.cart.handleClear();
+          }
+        } else if (act === 'sign-out') {
+          signOut();
+        }
+      });
+    });
+  }
+  // Close on outside click + Escape.
+  document.addEventListener('click', function (ev) {
+    var menu = document.getElementById('header-menu');
+    if (!menu || menu.hidden) return;
+    if (ev.target.closest('#header-menu') || ev.target.closest('#header-menu-btn')) return;
+    closeHeaderMenu();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') closeHeaderMenu();
+  });
+
   // ── Public API exposed to view modules ──────────────────────────────────
   window.fwApp.supa             = supa;
   window.fwApp.state            = state;
@@ -440,6 +553,7 @@
   window.fwApp.toast            = toast;
   window.fwApp.setView          = setView;
   window.fwApp.persistDraft     = persistDraft;
+  window.fwApp.canSaveDraft     = canSaveDraft;
   window.fwApp.signOut          = signOut;
   window.fwApp.EMAIL_EDGE_FN    = EMAIL_EDGE_FN;
   window.fwApp.loadCustomers    = loadCustomers;

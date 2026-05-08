@@ -203,9 +203,8 @@
     el.innerHTML = leftHtml
       + centerHtml
       + '<div class="footer-actions">'
+      // Save / Clear moved to the header hamburger menu.
       +   '<button class="btn btn-outline btn-fs" data-fw-cart="fullscreen" title="Toggle fullscreen" aria-label="Toggle fullscreen">&#9974;</button>'
-      +   '<button class="btn btn-outline" data-fw-cart="clear">&#8635; Clear</button>'
-      +   '<button class="btn btn-outline" data-fw-cart="save">&#128190; Save</button>'
       +   '<button class="btn-submit" data-fw-cart="review"' + reviewDisabled + '>&#10003; Review order</button>'
       + '</div>';
 
@@ -264,14 +263,37 @@
   }
 
   // Save just nudges the draft to persist immediately so the rep gets
-  // confirmation that their progress has been written.
+  // confirmation that their progress has been written. If a brand-new
+  // draft would be blocked by the persist gate (no customer / no units)
+  // we tell the rep specifically rather than show "Draft saved."
   async function handleSave() {
     var c = window.fwApp;
     if (typeof c.persistDraft !== 'function') return;
+
+    // Pre-check the gate when there is no active draft yet so the rep
+    // gets a meaningful message instead of a misleading success toast.
+    if (!c.state.activeDraftId && typeof c.canSaveDraft === 'function') {
+      var gate = c.canSaveDraft();
+      if (!gate.ok) {
+        if (gate.reason === 'no-customer') {
+          c.toast && c.toast('Pick a customer first, then add at least one item.', 'info');
+        } else if (gate.reason === 'no-units') {
+          c.toast && c.toast('Add at least one item to your cart before saving.', 'info');
+        } else {
+          c.toast && c.toast('Cannot save yet.', 'info');
+        }
+        return;
+      }
+    }
+
     try {
       var res = await c.persistDraft({ cart_items: items() });
       if (res && res.error) {
         c.toast && c.toast('Save failed: ' + (res.error.message || res.error), 'error');
+      } else if (res && res.skipped) {
+        // Race: gate became false between check and call. Surface a
+        // generic info toast rather than an incorrect success.
+        c.toast && c.toast('Draft was not saved. Pick a customer and add an item.', 'info');
       } else {
         c.toast && c.toast('Draft saved.', 'success');
       }
@@ -945,6 +967,8 @@
     setQuantity:            setQuantity,
     remove:                 remove,
     clear:                  clear,
+    handleClear:            handleClear,
+    handleSave:             handleSave,
     openPicker:             openPicker,
     openReview:             openReview,
     submit:                 submit,

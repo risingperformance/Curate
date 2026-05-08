@@ -104,7 +104,8 @@
 
   .header-actions {
     display: flex;
-    gap: 8px;
+    gap: 14px;
+    align-items: center;
   }
 
   .header-home-btn {
@@ -114,6 +115,92 @@
   }
   .header-home-btn:hover { opacity: 1; }
   .header-home-btn img { height: 22px; width: auto; display: block; }
+
+  /* Curate logo (decorative now; the menu button next to it is the actionable element). */
+  .header-curate-mark { display: flex; align-items: center; opacity: 0.85; }
+  .header-curate-mark img { height: 22px; width: auto; display: block; }
+
+  /* Hamburger menu trigger. */
+  .header-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.9);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  .header-menu-btn:hover { background: rgba(255,255,255,0.12); }
+  .header-menu-btn[aria-expanded="true"] { background: rgba(255,255,255,0.18); }
+
+  /* Dropdown menu. Anchored to the header's right edge. */
+  .header-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 32px;
+    min-width: 240px;
+    background: #fff;
+    color: #111;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    z-index: 200;
+    padding: 6px 0;
+    font-family: 'Barlow', sans-serif;
+  }
+  .header-menu[hidden] { display: none; }
+  @media (max-width: 720px) {
+    .header-menu { right: 16px; left: 16px; min-width: 0; }
+  }
+
+  .header-menu-profile {
+    padding: 10px 16px 8px;
+    line-height: 1.2;
+  }
+  .header-menu-profile-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: #111;
+  }
+  .header-menu-profile-email {
+    font-size: 11px;
+    color: #6b7280;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-menu-sep {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 4px 0;
+  }
+
+  .header-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    border: 0;
+    background: transparent;
+    color: #111;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .header-menu-item:hover { background: #f3f4f6; }
+  .header-menu-item:focus { outline: 2px solid #c8a84b; outline-offset: -2px; }
+  .header-menu-icon {
+    width: 18px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 14px;
+  }
+  .header-menu-item-danger { color: #c0272d; }
+  .header-menu-item-danger .header-menu-icon { color: #c0272d; }
+  .header-menu-item-danger:hover { background: #fef2f2; }
 
   /* ── BUTTONS ── */
   .btn {
@@ -2467,9 +2554,14 @@
     line-height: 1 !important;
   }
 
+  /* The customer-mode Save button. Hidden in rep view (Save lives in
+     the hamburger menu) and shown only when body.draft-link is set
+     by the early-init customer-draft detector. */
+  .btn-customer-save { display: none; }
+  body.draft-link .btn-customer-save { display: inline-flex; }
+
   /* ── MUST BE LAST: overrides all !important display rules above ── */
   .force-hidden { display: none !important; }
-  body.draft-link #btn-share-draft { display: none !important; }
 </style>
 </head>
 <body>
@@ -2500,10 +2592,58 @@
       <h1>Apparel Prebook Order Form</h1>
     </div>
     <div class="header-actions">
-      <button class="header-home-btn" data-action="handleExitToLanding" title="Back to season select">
+      <span class="header-curate-mark" aria-hidden="true">
         <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate" />
+      </span>
+      <!-- Hamburger menu trigger. Toggles #header-menu visibility. -->
+      <button class="header-menu-btn" id="header-menu-btn" type="button"
+              data-action="toggleHeaderMenu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="header-menu"
+              aria-label="Open menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <line x1="4"  y1="7"  x2="20" y2="7"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4"  y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="4"  y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
       </button>
     </div>
+  </div>
+
+  <!-- Header menu dropdown. Hidden by default; toggled by #header-menu-btn. -->
+  <div class="header-menu" id="header-menu" role="menu" aria-labelledby="header-menu-btn" hidden>
+    <div class="header-menu-profile" id="header-menu-profile">
+      <div class="header-menu-profile-name" id="header-menu-profile-name">Signed in</div>
+      <div class="header-menu-profile-email" id="header-menu-profile-email">-</div>
+    </div>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-action="handleExitToLanding">
+      <span class="header-menu-icon">&larr;</span>
+      <span>Back to season picker</span>
+    </button>
+    <button class="header-menu-item" role="menuitem" type="button" data-action="showCustomerInsight">
+      <span class="header-menu-icon">&#9432;</span>
+      <span>Customer Insight</span>
+    </button>
+    <button class="header-menu-item" role="menuitem" type="button" data-action="saveDraftInPlace">
+      <span class="header-menu-icon">&#128190;</span>
+      <span>Save draft</span>
+    </button>
+    <button class="header-menu-item" role="menuitem" type="button" data-action="openShareDraftModal">
+      <span class="header-menu-icon">&uarr;</span>
+      <span>Share draft link</span>
+    </button>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item header-menu-item-danger" role="menuitem" type="button" data-action="clearAll">
+      <span class="header-menu-icon">&#10005;</span>
+      <span>Clear order</span>
+    </button>
+    <div class="header-menu-sep"></div>
+    <button class="header-menu-item" role="menuitem" type="button" data-action="signOut">
+      <span class="header-menu-icon">&#9099;</span>
+      <span>Sign out</span>
+    </button>
   </div>
 </header>
 
@@ -2647,10 +2787,12 @@
   <span id="grand-units" style="display:none">0</span>
   <span id="grand-total" style="display:none">$0</span>
   <div class="footer-actions">
+    <!-- Save / Share / Clear moved to the header hamburger menu (rep
+         view). The customer-only Save button below is shown via the
+         body.draft-link CSS rule when a customer opens a draft link;
+         the hamburger menu is hidden in that mode. -->
     <button class="btn btn-outline btn-fs" data-action="toggleFullScreen" id="btn-fullscreen" title="Toggle fullscreen">⛶</button>
-    <button class="btn btn-outline" data-action="clearAll" id="btn-clear-all">↺ Clear</button>
-    <button class="btn btn-outline" data-action="saveDraftInPlace">💾 Save</button>
-    <button class="btn btn-outline" data-action="openShareDraftModal" id="btn-share-draft">⤴ Share</button>
+    <button class="btn btn-outline btn-customer-save" data-action="saveDraftInPlace">💾 Save</button>
     <button class="btn-submit" data-action="showReviewModal" id="btn-submit">✓ Review Order</button>
   </div>
 </footer>
