@@ -694,25 +694,28 @@
       emailRes = { ok: false, status: 0, body: (e && e.message) || 'Network error' };
     }
 
-    if (!emailRes.ok) {
-      var msg = 'Order email did not send. ';
-      if (emailRes.status === 401 || emailRes.status === 403) {
-        msg += 'Auth was rejected by the edge function (status ' + emailRes.status + '). Check the verify_jwt setting on the function.';
-      } else if (emailRes.status === 404) {
-        msg += 'The send-order-email edge function was not found at ' + c.EMAIL_EDGE_FN + '.';
-      } else {
-        msg += '(status ' + emailRes.status + ') ' + emailRes.body;
-      }
-      c.toast(msg, 'error');
+    // Mark the draft as submitted regardless of email outcome. The
+    // submission is the source of truth in the DB; the email is a
+    // notification convenience. If the email failed we surface a
+    // non-blocking warning so the rep is aware, but the order still
+    // counts as submitted.
+    var statusRes = await c.persistDraft({ status: 'submitted' });
+    if (statusRes.error) {
+      c.toast('Could not mark draft as submitted: ' + (statusRes.error.message || ''), 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Submit order'; }
       return;
     }
 
-    // Mark the draft as submitted now that the email landed.
-    var statusRes = await c.persistDraft({ status: 'submitted' });
-    if (statusRes.error) {
-      // Email went out but status update failed; surface the inconsistency.
-      c.toast('Order email sent, but could not update draft status: ' + (statusRes.error.message || ''), 'error');
+    if (!emailRes.ok) {
+      var msg = 'Order saved, but the confirmation email could not be sent. ';
+      if (emailRes.status === 401 || emailRes.status === 403) {
+        msg += '(Auth status ' + emailRes.status + '. Operations team can pull the order from the database.)';
+      } else if (emailRes.status === 404) {
+        msg += '(Edge function not found. Operations team can pull the order from the database.)';
+      } else {
+        msg += '(status ' + emailRes.status + ').';
+      }
+      c.toast(msg, 'warn');
     }
 
     closeModalRaw();

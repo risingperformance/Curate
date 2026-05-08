@@ -576,6 +576,48 @@ function toggleDashDrafts(seasonId) {
   if (card) card.classList.toggle('open');
 }
 
+// ── Home-screen hamburger menu ─────────────────────────────────────────────
+function toggleDashMenu() {
+  const menu = document.getElementById('dash-menu');
+  const btn  = document.getElementById('dash-menu-btn');
+  if (!menu || !btn) return;
+  if (menu.hidden) {
+    populateDashMenu();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+function closeDashMenu() {
+  const menu = document.getElementById('dash-menu');
+  const btn  = document.getElementById('dash-menu-btn');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function populateDashMenu() {
+  const u = window.currentUser || {};
+  const nameEl  = document.getElementById('dash-menu-profile-name');
+  const emailEl = document.getElementById('dash-menu-profile-email');
+  const adminEl = document.getElementById('dash-menu-admin');
+  if (nameEl)  nameEl.textContent  = u.name ? 'Signed in as ' + u.name : 'Signed in';
+  if (emailEl) emailEl.textContent = u.email || '-';
+  if (adminEl) adminEl.hidden = !(u.role === 'admin');
+}
+// Close on outside click.
+document.addEventListener('click', function (ev) {
+  const menu = document.getElementById('dash-menu');
+  if (!menu || menu.hidden) return;
+  if (ev.target.closest('#dash-menu') || ev.target.closest('#dash-menu-btn')) return;
+  closeDashMenu();
+});
+// Close on Escape.
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closeDashMenu();
+});
+
 // Apparel / Footwear toggle for the Top 10 Products panel.
 document.addEventListener('click', function (ev) {
   const btn = ev.target.closest('#prod-toggle button[data-cat]');
@@ -669,6 +711,7 @@ document.addEventListener('click', function(e) {
   if      (a === 'openDraftFromLanding')    openDraftFromLanding(el.dataset.token, el.dataset.category);
   else if (a === 'confirmDeleteDraft')      confirmDeleteDraft(el.dataset.token, el.dataset.account, el.dataset.category);
   else if (a === 'toggleDashDrafts')        toggleDashDrafts(el.dataset.id);
+  else if (a === 'toggleDashMenu')          toggleDashMenu();
   else if (a === 'toggleDraftList')         toggleDraftList(el.dataset.id);
   else if (a === 'selectSeason')            selectSeason(el.dataset.id, el.dataset.category);
   else if (a === 'executeDraftDelete')      executeDraftDelete(el.dataset.token, el);

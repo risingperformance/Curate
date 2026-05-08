@@ -249,6 +249,7 @@ async function handleLogin() {
     await supa.auth.signOut();
     return;
   }
+  window.adminUser = { name: sp.name || '', email: sp.email || email, role: sp.role };
   unlockAdmin();
 }
 
@@ -271,6 +272,7 @@ function unlockAdmin() {
   if (session) {
     const { data: sp } = await supa.from('salespeople').select('name, role, email').eq('email', session.user.email).single();
     if (sp && sp.role === 'admin') {
+      window.adminUser = { name: sp.name || '', email: sp.email || session.user.email, role: sp.role };
       unlockAdmin();
       return;
     }
@@ -1722,6 +1724,62 @@ const btnSignout = document.getElementById('btn-signout');
 if (btnSignout) {
   btnSignout.addEventListener('click', handleSignOut);
 }
+
+// ── Admin header hamburger menu ────────────────────────────────────────────
+function toggleAdminHeaderMenu() {
+  const menu = document.getElementById('header-menu');
+  const btn  = document.getElementById('header-menu-btn');
+  if (!menu || !btn) return;
+  if (menu.hidden) {
+    populateAdminHeaderMenu();
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  } else {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+function closeAdminHeaderMenu() {
+  const menu = document.getElementById('header-menu');
+  const btn  = document.getElementById('header-menu-btn');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function populateAdminHeaderMenu() {
+  // Read identity from the local cached salesperson record (already
+  // looked up at login). Falls back to the auth user email if needed.
+  const u = window.adminUser || {};
+  const nameEl  = document.getElementById('header-menu-profile-name');
+  const emailEl = document.getElementById('header-menu-profile-email');
+  if (nameEl)  nameEl.textContent  = u.name ? 'Signed in as ' + u.name : 'Signed in';
+  if (emailEl) emailEl.textContent = u.email || '-';
+}
+const adminMenuTrigger = document.getElementById('header-menu-btn');
+if (adminMenuTrigger) {
+  adminMenuTrigger.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    toggleAdminHeaderMenu();
+  });
+}
+document.querySelectorAll('[data-admin-menu]').forEach(function (item) {
+  item.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    const act = item.getAttribute('data-admin-menu');
+    closeAdminHeaderMenu();
+    if      (act === 'refresh') refreshActiveTab();
+    else if (act === 'signout') handleSignOut();
+  });
+});
+document.addEventListener('click', function (ev) {
+  const menu = document.getElementById('header-menu');
+  if (!menu || menu.hidden) return;
+  if (ev.target.closest('#header-menu') || ev.target.closest('#header-menu-btn')) return;
+  closeAdminHeaderMenu();
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closeAdminHeaderMenu();
+});
 
 // Upload close button
 const uploadCloseBtn = document.getElementById('upload-close-btn');

@@ -1856,24 +1856,67 @@
   }
   #season-landing.fade-out { opacity: 0; pointer-events: none; }
 
-  /* ── Dashboard topbar ───────────────────────────────────────────── */
+  /* ── Dashboard topbar (matches order-form headers) ──────────────── */
   .dash-topbar {
+    position: relative;
     background: #000; color: #fff;
+    flex: 0 0 64px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
+  }
+  .dash-topbar-inner {
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 32px; height: 64px;
-    flex: 0 0 64px;
+    max-width: 1680px; margin: 0 auto;
   }
-  .dash-brand { display: flex; align-items: center; gap: 20px; }
-  .dash-fj { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: 0.3em; font-size: 14px; }
-  .dash-curate { font-family: 'Playfair Display', serif; font-style: italic; font-size: 22px; }
-  .dash-signout {
-    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18);
-    color: rgba(255,255,255,0.85);
-    padding: 8px 14px; border-radius: 4px; cursor: pointer;
-    font-family: 'Barlow Condensed', sans-serif; font-weight: 600;
-    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  .dash-fj-logo { display: flex; align-items: center; }
+  .dash-fj-logo-img { height: 36px; width: auto; display: block; }
+  .dash-topbar-right { display: flex; align-items: center; gap: 14px; }
+  .dash-curate-mark { display: flex; align-items: center; opacity: 0.85; }
+  .dash-curate-mark img { height: 22px; width: auto; display: block; }
+  .dash-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.9);
+    border-radius: 4px; cursor: pointer;
+    transition: background-color 0.15s ease;
   }
-  .dash-signout:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .dash-menu-btn:hover { background: rgba(255,255,255,0.12); }
+  .dash-menu-btn[aria-expanded="true"] { background: rgba(255,255,255,0.18); }
+
+  /* Dropdown */
+  .dash-menu {
+    position: absolute;
+    top: calc(100% + 4px); right: 32px;
+    min-width: 240px;
+    background: #fff; color: #111;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    z-index: 200;
+    padding: 6px 0;
+    font-family: 'Barlow', sans-serif;
+  }
+  .dash-menu[hidden] { display: none; }
+  .dash-menu-profile { padding: 10px 16px 8px; line-height: 1.2; }
+  .dash-menu-profile-name { font-weight: 700; font-size: 13px; color: #111; }
+  .dash-menu-profile-email { font-size: 11px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dash-menu-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+  .dash-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    border: 0; background: transparent;
+    color: #111;
+    font-family: inherit; font-size: 14px; text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .dash-menu-item:hover { background: #f3f4f6; }
+  .dash-menu-icon { width: 18px; text-align: center; color: #6b7280; font-size: 14px; }
+  @media (max-width: 720px) {
+    .dash-menu { right: 16px; left: 16px; min-width: 0; }
+  }
 
   /* ── Wrap & greeting ────────────────────────────────────────────── */
   .dash-wrap { max-width: 1320px; margin: 0 auto; padding: 36px 32px 80px; width: 100%; }
@@ -2475,13 +2518,54 @@
 
 <!-- SEASON LANDING PAGE (dashboard layout) -->
 <div id="season-landing">
-  <div class="dash-topbar">
-    <div class="dash-brand">
-      <span class="dash-fj">FOOTJOY</span>
-      <span class="dash-curate">Curate</span>
+  <header class="dash-topbar">
+    <div class="dash-topbar-inner">
+      <div class="dash-fj-logo">
+        <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" class="dash-fj-logo-img">
+      </div>
+      <div class="dash-topbar-right">
+        <span class="dash-curate-mark" aria-hidden="true">
+          <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
+        </span>
+        <button class="dash-menu-btn" id="dash-menu-btn" type="button"
+                data-action="toggleDashMenu"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="dash-menu"
+                aria-label="Open menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <line x1="4" y1="7"  x2="20" y2="7"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <!-- Hidden legacy button so existing data-action="signOut" handlers still resolve. -->
+        <button id="btn-sign-out" data-action="signOut" hidden>Sign Out</button>
+      </div>
     </div>
-    <button id="btn-sign-out" data-action="signOut" class="dash-signout">Sign Out</button>
-  </div>
+
+    <!-- Dropdown menu -->
+    <div class="dash-menu" id="dash-menu" role="menu" aria-labelledby="dash-menu-btn" hidden>
+      <div class="dash-menu-profile">
+        <div class="dash-menu-profile-name" id="dash-menu-profile-name">Signed in as</div>
+        <div class="dash-menu-profile-email" id="dash-menu-profile-email">-</div>
+      </div>
+      <div class="dash-menu-sep"></div>
+      <a class="dash-menu-item" role="menuitem" href="dashboard.html">
+        <span class="dash-menu-icon">&#9645;</span>
+        <span>Go to Dashboard</span>
+      </a>
+      <a class="dash-menu-item" role="menuitem" href="admin.html" id="dash-menu-admin" hidden>
+        <span class="dash-menu-icon">&#9881;</span>
+        <span>Go to Admin Portal</span>
+      </a>
+      <div class="dash-menu-sep"></div>
+      <button class="dash-menu-item" role="menuitem" type="button" data-action="signOut">
+        <span class="dash-menu-icon">&#9099;</span>
+        <span>Sign out</span>
+      </button>
+    </div>
+  </header>
 
   <div class="dash-wrap">
     <div class="dash-greeting">
