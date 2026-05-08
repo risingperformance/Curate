@@ -25,7 +25,7 @@ const TABLES = {
     bulkOrderable: true,
   },
   salespeople: {
-    label: 'Salespeople',
+    label: 'Users',
     pk: null, // will be auto-detected
     orderBy: null,
     bulkOrderable: true,
@@ -571,6 +571,9 @@ function renderTable(tableName) {
       <input type="text" class="search-box" placeholder="Search..." id="search-${tableName}"
              value="${escapeAttr(state.search[tableName] || '')}">
       <button class="btn btn-outline" data-action="addNewRow" data-table="${tableName}">+ Add Row</button>
+      ${tableName === 'salespeople' ? `
+        <button class="btn btn-primary" data-action="openInviteUser">+ Invite User</button>
+      ` : ''}
       <label class="btn btn-outline" style="cursor:pointer;margin:0;">
         📥 Upload CSV
         <input type="file" accept=".csv" style="display:none" data-action="csvUpload" data-table="${tableName}">
@@ -1725,6 +1728,102 @@ if (btnSignout) {
   btnSignout.addEventListener('click', handleSignOut);
 }
 
+// ── Invite User modal ──────────────────────────────────────────────────────
+function openInviteUserModal() {
+  const overlay = document.getElementById('invite-user-overlay');
+  const errEl   = document.getElementById('invite-error');
+  if (!overlay) return;
+  // Reset form state on each open.
+  const form = document.getElementById('invite-user-form');
+  if (form) form.reset();
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+  // Suggest a default password so admins don't have to think about it.
+  const pwd = document.getElementById('invite-password');
+  if (pwd && !pwd.value) pwd.value = generateTempPassword();
+  overlay.hidden = false;
+  // Focus first field for keyboard users.
+  const first = document.getElementById('invite-first-name');
+  if (first) first.focus();
+}
+function closeInviteUserModal() {
+  const overlay = document.getElementById('invite-user-overlay');
+  if (overlay) overlay.hidden = true;
+}
+function generateTempPassword() {
+  // 12-character mixed password; trivial to share verbally and meets
+  // Supabase's default 6-char minimum with margin.
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let out = '';
+  for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+async function submitInviteUser(ev) {
+  ev.preventDefault();
+  const errEl = document.getElementById('invite-error');
+  const submitBtn = document.getElementById('invite-submit');
+  const showErr = (msg) => { if (errEl) { errEl.hidden = false; errEl.textContent = msg; } };
+  if (errEl) errEl.hidden = true;
+
+  const firstName = document.getElementById('invite-first-name').value.trim();
+  const lastName  = document.getElementById('invite-last-name').value.trim();
+  const email     = document.getElementById('invite-email').value.trim().toLowerCase();
+  const role      = document.getElementById('invite-role').value;
+  const country   = document.getElementById('invite-country').value;
+  const password  = document.getElementById('invite-password').value;
+
+  if (!firstName || !lastName || !email || !role || !password) {
+    showErr('All fields are required.');
+    return;
+  }
+  if (password.length < 8) {
+    showErr('Password must be at least 8 characters.');
+    return;
+  }
+
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating...'; }
+
+  // Create the auth user via a TEMPORARY supabase client so the admin's
+  // own session is not replaced by the new user's session. supabase-js
+  // signUp() automatically signs the new user in on the calling client,
+  // hence the throwaway instance.
+  const SUPA_CFG = window.__SUPABASE_CONFIG || {};
+  const tempClient = window.supabase.createClient(SUPA_CFG.url, SUPA_CFG.key);
+  const signupRes = await tempClient.auth.signUp({ email, password });
+  if (signupRes.error) {
+    showErr('Auth signup failed: ' + signupRes.error.message);
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create user'; }
+    return;
+  }
+
+  // Insert salesperson row using the admin's authed client.
+  const fullName = (firstName + ' ' + lastName).trim();
+  const { error: rowErr } = await supa.from('salespeople').insert({
+    name:    fullName,
+    email,
+    role,
+    country: country || null,
+    status:  'active'
+  });
+  if (rowErr) {
+    showErr('User account created but salespeople row failed: ' + rowErr.message
+          + '. Add the row manually in the table below.');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create user'; }
+    return;
+  }
+
+  toast('Invited ' + fullName + '. They can sign in with the password you shared.', 'success');
+  closeInviteUserModal();
+  // Refresh the salespeople tab so the new row appears.
+  if (state && state.activeTab === 'salespeople') refreshActiveTab();
+}
+
+// Wire the form submit listener once the DOM is ready.
+(function () {
+  const form = document.getElementById('invite-user-form');
+  if (form) form.addEventListener('submit', submitInviteUser);
+})();
+
 // ── Admin header hamburger menu ────────────────────────────────────────────
 function toggleAdminHeaderMenu() {
   const menu = document.getElementById('header-menu');
@@ -1826,6 +1925,8 @@ document.addEventListener('click', function(e) {
   else if (a === 'deleteImage') deleteImage(el.dataset.bucket, el.dataset.name);
   else if (a === 'closeModal') closeModal();
   else if (a === 'refreshBucketFiles') loadBucketFiles(state.activeBucket);
+  else if (a === 'openInviteUser') openInviteUserModal();
+  else if (a === 'closeInviteUser') closeInviteUserModal();
 });
 
 document.addEventListener('change', function(e) {

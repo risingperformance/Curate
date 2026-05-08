@@ -315,6 +315,57 @@
   .modal p { font-size: 13px; color: var(--mid); margin-bottom: 16px; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
 
+  /* ── Invite User modal ─────────────────────────────────────────── */
+  .invite-overlay {
+    position: fixed; inset: 0; background: rgba(10,22,40,0.6); z-index: 250;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .invite-overlay[hidden] { display: none; }
+  .invite-modal {
+    background: var(--white); border-radius: 12px;
+    width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    font-family: 'Barlow', sans-serif;
+  }
+  .invite-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px; border-bottom: 1px solid var(--border);
+  }
+  .invite-head h3 {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 22px;
+    color: var(--navy); margin: 0;
+  }
+  .invite-close {
+    width: 32px; height: 32px; border-radius: 6px;
+    border: 0; background: transparent; cursor: pointer;
+    color: var(--mid); font-size: 22px; line-height: 1;
+  }
+  .invite-close:hover { background: var(--border); color: var(--navy); }
+  #invite-user-form { padding: 18px 22px 22px; }
+  .invite-row { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .invite-row-2 { flex-direction: row; gap: 12px; }
+  .invite-row-2 > div { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .invite-row label {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--mid);
+  }
+  .invite-row input, .invite-row select {
+    padding: 9px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-family: inherit; font-size: 14px;
+    color: var(--navy); background: var(--white);
+  }
+  .invite-row input:focus, .invite-row select:focus {
+    outline: 2px solid var(--gold); outline-offset: -1px; border-color: var(--gold);
+  }
+  .invite-hint { font-size: 11px; color: var(--mid); }
+  .invite-error {
+    padding: 10px 12px; border-radius: 6px;
+    background: #fef2f2; color: #b91c1c; font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .invite-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
   /* ── IMAGE MANAGER ── */
   .bucket-selector {
     display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;
@@ -719,6 +770,59 @@
 ═══════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- Invite User modal (Settings -> Users) -->
+<div class="invite-overlay" id="invite-user-overlay" hidden>
+  <div class="invite-modal">
+    <div class="invite-head">
+      <h3>Invite User</h3>
+      <button type="button" class="invite-close" data-action="closeInviteUser" aria-label="Close">&times;</button>
+    </div>
+    <form id="invite-user-form">
+      <div class="invite-row invite-row-2">
+        <div>
+          <label for="invite-first-name">First name</label>
+          <input id="invite-first-name" type="text" required autocomplete="given-name">
+        </div>
+        <div>
+          <label for="invite-last-name">Last name</label>
+          <input id="invite-last-name" type="text" required autocomplete="family-name">
+        </div>
+      </div>
+      <div class="invite-row">
+        <label for="invite-email">Email</label>
+        <input id="invite-email" type="email" required autocomplete="email">
+      </div>
+      <div class="invite-row invite-row-2">
+        <div>
+          <label for="invite-role">Role</label>
+          <select id="invite-role" required>
+            <option value="rep">Rep</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label for="invite-country">Country</label>
+          <select id="invite-country">
+            <option value="AU">Australia</option>
+            <option value="NZ">New Zealand</option>
+          </select>
+        </div>
+      </div>
+      <div class="invite-row">
+        <label for="invite-password">Temporary password</label>
+        <input id="invite-password" type="text" required minlength="8" autocomplete="new-password">
+        <div class="invite-hint">Share this with the new user. They can change it after signing in.</div>
+      </div>
+      <div id="invite-error" class="invite-error" hidden></div>
+      <div class="invite-actions">
+        <button type="button" class="btn btn-outline" data-action="closeInviteUser">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="invite-submit">Create user</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
