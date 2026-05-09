@@ -990,6 +990,8 @@ function previewLink() {
 }
 
 async function sendInvite() {
+  console.log('[diary] sendInvite click');
+  const sendBtn = document.getElementById('m-invite-send');
   const email   = document.getElementById('inv-email').value.trim();
   const selIds  = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')].map(cb => cb.value);
   const firstName = document.getElementById('inv-first').value.trim();
@@ -999,9 +1001,35 @@ async function sendInvite() {
 
   const tpl = templates.find(t => t.id === selectedTplId);
 
-  if (!tpl)           { toast('Please select an email template.', 'error'); return; }
-  if (!email)         { toast('Please enter a customer email address.', 'error'); return; }
-  if (!selIds.length) { toast('Please select at least one slot to offer.', 'error'); return; }
+  // Helper: inline banner inside the modal so the user always sees the
+  // error even if the toast scrolls offscreen behind the modal.
+  const banner = document.getElementById('m-invite-error') || (() => {
+    const b = document.createElement('div');
+    b.id = 'm-invite-error';
+    b.style.cssText = 'margin:0 26px 12px;padding:10px 14px;border-radius:7px;background:#fef0f0;border:1px solid #f4c0bd;color:var(--red);font-size:12px;font-weight:600;display:none';
+    document.querySelector('#m-invite .modal-ftr').insertAdjacentElement('beforebegin', b);
+    return b;
+  })();
+  const showError = (msg) => { banner.textContent = msg; banner.style.display = 'block'; toast(msg, 'error'); };
+  const clearError = () => { banner.style.display = 'none'; };
+
+  if (!tpl)           { showError('Please select an email template.'); return; }
+  if (!email)         { showError('Please enter a customer email address.'); return; }
+  if (!selIds.length) { showError('Please select at least one appointment slot to offer.'); return; }
+  if (!me || !me.name) { showError('Session expired. Please refresh and sign in again.'); return; }
+
+  clearError();
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.dataset.origText = sendBtn.textContent;
+    sendBtn.textContent = 'Sending...';
+  }
+  const restoreBtn = () => {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      if (sendBtn.dataset.origText) sendBtn.textContent = sendBtn.dataset.origText;
+    }
+  };
 
   const { data: inv, error } = await sb.from('booking_invitations').insert({
     am_name: me.name, am_email: me.email,
@@ -1011,7 +1039,12 @@ async function sendInvite() {
     expires_at: new Date(Date.now() + 30 * 86400000).toISOString()
   }).select().single();
 
-  if (error) { toast('Error creating invitation. Please try again.', 'error'); return; }
+  if (error) {
+    console.error('[diary] booking_invitations insert failed', error);
+    showError('Could not create invitation: ' + (error.message || 'database error'));
+    restoreBtn();
+    return;
+  }
 
   const bookUrl = window.location.href.replace(/[^/]*$/, '') + 'booking.html#token=' + inv.token;
   const offered = slots.filter(s => selIds.includes(s.id));
@@ -1051,12 +1084,17 @@ async function sendInvite() {
     }
     toast('Invitation sent to ' + email + '!', 'success');
     closeM('m-invite');
+    restoreBtn();
     quickSelCust = null;
-    document.getElementById('quick-cust-q').value = '';
-    document.getElementById('quick-cust-sel').style.display = 'none';
+    const qInput = document.getElementById('quick-cust-q');
+    if (qInput) qInput.value = '';
+    const qSel = document.getElementById('quick-cust-sel');
+    if (qSel) qSel.style.display = 'none';
   } catch (err) {
-    navigator.clipboard?.copyText(bookUrl).catch(() => {});
-    toast('Email failed. Booking link copied to clipboard.', 'error');
+    console.error('[diary] sendInvite email failed', err);
+    try { await navigator.clipboard?.writeText(bookUrl); } catch (_) {}
+    showError('Email failed: ' + (err?.message || 'unknown error') + '. Booking link copied to clipboard.');
+    restoreBtn();
   }
 }
 
