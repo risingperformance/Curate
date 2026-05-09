@@ -1046,7 +1046,17 @@ async function sendInvite() {
     return;
   }
 
-  const bookUrl = window.location.href.replace(/[^/]*$/, '') + 'booking.html#token=' + inv.token;
+  // Booking link uses window.__APP_CONFIG.publicOrigin (the full base URL,
+  // including any sub-path like /Curate/cloudflare-deploy) when sending
+  // from localhost so the customer can still open the link. In production
+  // we strip the filename off the current URL, which preserves whatever
+  // sub-path the deploy lives under.
+  const cfgOrigin = (window.__APP_CONFIG && window.__APP_CONFIG.publicOrigin) || '';
+  const isLocal   = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(window.location.origin);
+  const linkBase  = (isLocal && cfgOrigin)
+    ? cfgOrigin.replace(/\/$/, '') + '/'
+    : window.location.href.replace(/[^/]*$/, '');
+  const bookUrl   = linkBase + 'booking.html#token=' + inv.token;
   const offered = slots.filter(s => selIds.includes(s.id));
   const slotRows = offered.map(s => {
     const d  = new Date(s.date + 'T00:00:00');
