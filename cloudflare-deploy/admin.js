@@ -94,6 +94,19 @@ const TABLES = {
     rowKey: 'id',
     orderBy: 'milestone_date',
     bulkOrderable: false,
+    // Fallback column list shown when the table is empty so the user
+    // can add the first row from the UI without uploading a CSV.
+    defaultColumns: ['milestone_date', 'title', 'description', 'season_id'],
+  },
+  email_templates: {
+    label: 'Templates',
+    pk: 'id',
+    rowKey: 'id',
+    orderBy: 'name',
+    bulkOrderable: false,
+    // Used by the appointment diary's Send Invitation flow (was previously
+    // edited inside the diary's own Templates tab; moved here May 2026).
+    defaultColumns: ['name', 'email_subject', 'heading', 'intro_text', 'is_active'],
   },
 };
 
@@ -126,7 +139,7 @@ const SECTIONS = {
   settings: {
     label: 'Settings',
     defaultTab: 'salespeople',
-    tabs: ['salespeople', 'milestones', 'images'],
+    tabs: ['salespeople', 'milestones', 'email_templates', 'images'],
   },
 };
 
@@ -161,6 +174,7 @@ const TAB_SLUGS_BY_SECTION = {
   settings: {
     'users':            'salespeople',
     'milestones':       'milestones',
+    'templates':        'email_templates',
     'brand-assets':     'images',
   },
 };
@@ -512,7 +526,11 @@ async function loadTable(tableName) {
     if (!state.colTypes) state.colTypes = {};
     state.colTypes[tableName] = typeMap;
   } else {
-    state.columns[tableName] = [];
+    // Empty table: fall back to cfg.defaultColumns if provided so the user
+    // can still see headers + add their first row from the UI.
+    state.columns[tableName] = Array.isArray(cfg.defaultColumns)
+      ? cfg.defaultColumns.slice()
+      : [];
   }
   document.getElementById('last-updated').textContent =
     'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

@@ -56,9 +56,10 @@ html, body { height: 100%; font-family: 'Space Grotesk', sans-serif; background:
 ════════════════════════════ */
 #login-screen {
   position: fixed; inset: 0; background: var(--black); z-index: 9999;
-  display: flex; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center;
   transition: opacity 0.4s;
 }
+#login-screen.visible { display: flex; }
 #login-screen.gone { opacity: 0; pointer-events: none; }
 .login-card { text-align: center; }
 .eyebrow {
@@ -76,7 +77,7 @@ html, body { height: 100%; font-family: 'Space Grotesk', sans-serif; background:
    APP SHELL
 ════════════════════════════ */
 #app { display: none; height: 100vh; }
-.app-layout { display: flex; height: 100vh; overflow: hidden; }
+.app-layout { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
 /* ════════════════════════════
    LEFT SIDEBAR
@@ -245,7 +246,7 @@ html, body { height: 100%; font-family: 'Space Grotesk', sans-serif; background:
 .main-area::-webkit-scrollbar-thumb { background: var(--border-lt); border-radius: 2px; }
 
 /* Calendar layout */
-.cal-layout { display: grid; grid-template-columns: 1fr 310px; gap: 20px; align-items: start; }
+.cal-layout { display: grid; grid-template-columns: 1fr 30%; gap: 20px; align-items: start; }
 
 /* ════════════════════════════
    MONTH CALENDAR CARD
@@ -320,7 +321,8 @@ html, body { height: 100%; font-family: 'Space Grotesk', sans-serif; background:
 .cal-card .cal-day .day-chips {
   flex: 1; overflow: hidden;
 }
-/* Right column shouldn't stretch beyond what it needs but should scroll if it does */
+/* Right column (split-view dark pane) shouldn't stretch beyond what it needs but should scroll if it does */
+.cal-layout > .day-detail-pane,
 .cal-layout > .right-col {
   align-self: stretch;
   overflow-y: auto;
@@ -686,6 +688,378 @@ textarea { resize: vertical; min-height: 68px; }
 .toast.show    { transform: translateY(0); opacity: 1; }
 .toast.success { background: var(--teal); }
 .toast.error   { background: var(--red); }
+
+/* ════════════════════════════════════════════════════════════
+   FJ TOPBAR (matches home / order forms)
+════════════════════════════════════════════════════════════ */
+.fj-topbar {
+  position: relative;
+  background: #000; color: #fff;
+  flex: 0 0 64px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.25);
+  z-index: 100;
+}
+.fj-topbar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; height: 64px; max-width: 1680px; margin: 0 auto;
+}
+.fj-topbar-logo { display: flex; align-items: center; }
+.fj-topbar-logo-img { height: 36px; width: auto; display: block; }
+.fj-topbar-right { display: flex; align-items: center; gap: 14px; }
+.fj-curate-mark { display: flex; align-items: center; opacity: 0.85; }
+.fj-curate-mark img { height: 22px; width: auto; display: block; }
+.fj-menu-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
+  border-radius: 4px; cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.fj-menu-btn:hover { background: rgba(255,255,255,0.12); }
+.fj-menu-btn[aria-expanded="true"] { background: rgba(255,255,255,0.18); }
+.fj-menu {
+  position: absolute;
+  top: calc(100% + 4px); right: 32px;
+  min-width: 240px;
+  background: #fff; color: #111;
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+  z-index: 200;
+  padding: 6px 0;
+  font-family: 'Space Grotesk', sans-serif;
+}
+.fj-menu[hidden] { display: none; }
+.fj-menu-profile { padding: 10px 16px 8px; line-height: 1.2; }
+.fj-menu-profile-name { font-weight: 700; font-size: 13px; color: #111; }
+.fj-menu-profile-email { font-size: 11px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.fj-menu-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+.fj-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 16px;
+  background: transparent; border: 0; cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: #111; text-align: left;
+}
+.fj-menu-item:hover { background: #f3f4f6; }
+.fj-menu-icon { width: 18px; display: inline-flex; justify-content: center; color: #6b7280; }
+
+/* ════════════════════════════════════════════════════════════
+   PAGE SUB-BAR (page title + tabs + new slot action)
+════════════════════════════════════════════════════════════ */
+.page-subbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--border-lt);
+  padding: 14px 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.page-titles { line-height: 1; }
+.page-title { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1; }
+.page-sub { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1; }
+.page-actions { display: flex; gap: 12px; align-items: center; }
+.btn-new-slot-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 7px;
+  background: var(--gold); color: var(--black);
+  font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700;
+  border: none; cursor: pointer; line-height: 1;
+}
+.btn-new-slot-pill:hover { background: var(--gold-dk); }
+
+.page-body { flex: 1; overflow-y: auto; background: var(--off); }
+
+/* ════════════════════════════════════════════════════════════
+   DAY DETAIL PANE (split-view dark navy editorial)
+════════════════════════════════════════════════════════════ */
+.day-detail-pane {
+  background: linear-gradient(180deg, #0a1834, #1e2d4a);
+  color: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  align-self: stretch;
+}
+.ddp-head {
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+.ddp-eyebrow {
+  font-family: 'Space Grotesk', sans-serif;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  font-size: 10px; font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+.ddp-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px; font-weight: 600;
+  color: #fff;
+  line-height: 1.15;
+  margin-top: 8px;
+}
+.ddp-meta {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  margin-top: 6px;
+  line-height: 1;
+}
+.ddp-body {
+  padding: 18px 18px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+.ddp-body::-webkit-scrollbar { width: 4px; }
+.ddp-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.ddp-empty {
+  text-align: center;
+  padding: 36px 0;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ddp-empty button { margin-top: 10px; }
+
+/* Override existing .detail-slot / .ds-* when inside the dark pane */
+.day-detail-pane .detail-slot {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 12px; border-radius: 8px; margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.day-detail-pane .detail-slot:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(232,184,75,0.40);
+}
+.day-detail-pane .ds-bar { width: 3px; align-self: stretch; border-radius: 2px; flex-shrink: 0; }
+.day-detail-pane .ds-bar.booked { background: var(--teal); }
+.day-detail-pane .ds-bar.avail  { background: var(--gold); }
+.day-detail-pane .ds-time {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 700;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+.day-detail-pane .ds-name {
+  font-size: 13px; font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+.day-detail-pane .ds-meta {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  margin-top: 3px;
+  line-height: 1.3;
+}
+.day-detail-pane .ds-badge {
+  font-size: 8px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 3px 7px; border-radius: 20px; text-transform: uppercase;
+  flex-shrink: 0; align-self: flex-start; margin-top: 2px;
+}
+.day-detail-pane .ds-badge.booked { background: rgba(44,181,160,0.18); color: #6fd9c4; }
+.day-detail-pane .ds-badge.avail  { background: rgba(232,184,75,0.20); color: var(--gold); }
+.day-detail-pane .btn { background: rgba(255,255,255,0.10); color: #fff; border: 1px solid rgba(255,255,255,0.18); }
+.day-detail-pane .btn-gold { background: var(--gold); color: var(--black); border-color: var(--gold); }
+.day-detail-pane .btn-ghost { background: transparent; color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.18); }
+.day-detail-pane .btn-ghost:hover { background: rgba(255,255,255,0.06); color: #fff; }
+
+/* ════════════════════════════════════════════════════════════
+   DAY TIMELINE (hour-by-hour split-view)
+════════════════════════════════════════════════════════════ */
+.ddp-meta-line {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.04em;
+  margin-bottom: 16px;
+}
+.ddp-timeline {
+  display: flex; flex-direction: column;
+  gap: 6px;
+}
+.ddp-row {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 56px;
+}
+.ddp-hour {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  padding-top: 8px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.ddp-row-content {
+  display: flex; flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.ddp-row-empty {
+  flex: 1;
+  border: 1px dashed rgba(255,255,255,0.13);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.32);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.ddp-row-empty:hover {
+  border-color: rgba(232,184,75,0.45);
+  color: var(--gold);
+  background: rgba(232,184,75,0.05);
+}
+.ddp-row-empty.disabled {
+  cursor: default; opacity: 0.4;
+}
+.ddp-row-empty.disabled:hover {
+  border-color: rgba(255,255,255,0.13);
+  color: rgba(255,255,255,0.32);
+  background: transparent;
+}
+
+/* Slot card variant inside the timeline */
+.day-detail-pane .detail-slot.timeline {
+  margin-bottom: 0;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.day-detail-pane .detail-slot.timeline.booked {
+  background: rgba(255,255,255,0.06);
+}
+.day-detail-pane .ds-status {
+  margin-top: 8px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.day-detail-pane .ds-status.booked { color: #6fd9c4; }
+.day-detail-pane .ds-status.avail  { color: var(--gold); }
+
+/* ════════════════════════════════════════════════════════════
+   SEND INVITATION MODAL — split form rail + live email preview
+════════════════════════════════════════════════════════════ */
+#m-invite .modal.modal-invite {
+  width: 1180px; max-width: 96vw;
+  height: 760px; max-height: 92vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#m-invite .modal-hdr { background: #fafafa; flex-shrink: 0; }
+#m-invite .modal-hdr-sub { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+#m-invite .modal-body.inv-split {
+  display: grid;
+  /* 50/50 split between form pane and live email preview. */
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  flex: 1; min-height: 0;
+}
+#m-invite .modal-ftr { flex-shrink: 0; }
+
+.inv-form-pane {
+  background: #fafafa;
+  overflow-y: auto;
+  border-right: 1px solid var(--border-lt);
+}
+.inv-form-pane::-webkit-scrollbar { width: 6px; }
+.inv-form-pane::-webkit-scrollbar-thumb { background: var(--border-lt); border-radius: 3px; }
+.inv-section {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-lt);
+}
+.inv-section:last-child { border-bottom: 0; }
+.inv-section h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  margin-bottom: 14px;
+  line-height: 1;
+  display: flex; align-items: center; gap: 10px;
+}
+.inv-step {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  background: var(--text); color: #fff;
+  border-radius: 50%;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700; line-height: 1;
+}
+
+/* Slot picker - 2-column grid for the invite modal */
+.slot-picker.slot-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  border: 0;
+  max-height: none;
+  overflow: visible;
+  background: transparent;
+  padding: 0;
+}
+.slot-picker.slot-picker-grid .sp-opt {
+  border: 1px solid var(--border-lt);
+  border-radius: 7px;
+  background: #fff;
+  margin: 0;
+}
+.slot-picker.slot-picker-grid .sp-opt:hover {
+  border-color: var(--text);
+  background: #fff;
+}
+.slot-picker.slot-picker-grid .sp-opt:has(input:checked) {
+  border-color: var(--gold);
+  background: rgba(232,184,75,0.08);
+}
+
+/* Preview pane */
+.inv-preview-pane {
+  display: flex; flex-direction: column;
+  min-height: 0;
+  background: #ebebeb;
+}
+.inv-preview-toolbar {
+  background: #fff;
+  border-bottom: 1px solid var(--border-lt);
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+.inv-preview-meta {
+  font-size: 11px; color: var(--muted);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.inv-preview-meta strong { color: var(--text); font-weight: 700; }
+.inv-preview-sep { color: var(--grey-lt); }
+.inv-preview-canvas {
+  flex: 1; min-height: 0;
+  background: #ebebeb;
+}
+#inv-email-iframe {
+  width: 100%; height: 100%;
+  border: 0;
+  background: #ebebeb;
+  display: block;
+}
+
+/* Subject is now shown in the preview-pane toolbar; keep the legacy
+   in-form subject preview hidden even though older JS still writes to it. */
+#m-invite #tpl-subject-preview { display: none !important; }
+
 </style>
 </head>
 <body>
@@ -713,79 +1087,74 @@ textarea { resize: vertical; min-height: 68px; }
 <div id="app">
   <div class="app-layout">
 
-    <!-- ── SIDEBAR ── -->
-    <aside class="sidebar">
-      <div class="sb-header">
-        <a class="sb-back-btn" id="sb-back-btn" href="#">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          Select a Season
-        </a>
-        <div class="sb-curate-logo">
-          <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate" style="height:52px;width:auto;display:block;margin:0 auto">
+    <!-- ── FJ TOPBAR (full-width, matches home / order forms) ── -->
+    <header class="fj-topbar">
+      <div class="fj-topbar-inner">
+        <div class="fj-topbar-logo">
+          <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" class="fj-topbar-logo-img">
         </div>
-        <div class="sb-am-card">
-          <div class="sb-avatar" id="sb-initials">--</div>
-          <div class="sb-am-info">
-            <div class="sb-am-name" id="sb-name">--</div>
-            <div class="sb-am-role">Account Manager</div>
-          </div>
-          <div class="sb-am-dot"></div>
-        </div>
-      </div>
-
-      <div class="sb-metrics">
-        <div class="sb-metrics-label" id="sb-month-label">This Month</div>
-        <div class="metric-row">
-          <div class="metric m-gold">
-            <div class="metric-val" id="m-total">0</div>
-            <div class="metric-lbl">Slots</div>
-          </div>
-          <div class="metric m-teal">
-            <div class="metric-val" id="m-booked">0</div>
-            <div class="metric-lbl">Confirmed</div>
-          </div>
-        </div>
-        <div class="metric-row">
-          <div class="metric m-purple">
-            <div class="metric-val" id="m-avail">0</div>
-            <div class="metric-lbl">Available</div>
-          </div>
-          <div class="metric m-coral">
-            <div class="metric-val" id="m-cancel">0</div>
-            <div class="metric-lbl">Cancelled</div>
-          </div>
+        <div class="fj-topbar-right">
+          <span class="fj-curate-mark" aria-hidden="true">
+            <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
+          </span>
+          <button class="fj-menu-btn" id="fj-menu-btn" type="button"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  aria-controls="fj-menu"
+                  aria-label="Open menu">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <line x1="4" y1="7"  x2="20" y2="7"  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
-
-      <div class="sb-bookings" id="sb-bookings-list">
-        <div class="sb-section-head">Upcoming Bookings</div>
-        <div style="text-align:center;padding:20px 0;color:rgba(255,255,255,0.25);font-size:11px">Loading&hellip;</div>
-      </div>
-
-      <div class="sb-footer">
-        <button class="btn-new-slot" id="sb-new-slot-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          New Appointment Slot
+      <div class="fj-menu" id="fj-menu" role="menu" aria-labelledby="fj-menu-btn" hidden>
+        <div class="fj-menu-profile">
+          <div class="fj-menu-profile-name" id="fj-menu-name">&mdash;</div>
+          <div class="fj-menu-profile-email" id="fj-menu-email">&mdash;</div>
+        </div>
+        <div class="fj-menu-sep"></div>
+        <button class="fj-menu-item" id="fj-back-home-btn" role="menuitem" type="button">
+          <span class="fj-menu-icon">&larr;</span><span>Back to Home</span>
+        </button>
+        <div class="fj-menu-sep"></div>
+        <button class="fj-menu-item" id="fj-sign-out-btn" role="menuitem" type="button">
+          <span class="fj-menu-icon">&#9099;</span><span>Sign out</span>
         </button>
       </div>
-    </aside>
+    </header>
 
-    <!-- ── RIGHT PANEL ── -->
-    <div class="right-panel">
-
-      <!-- Top Bar -->
-      <div class="topbar">
-        <div class="topbar-date">
-          <div class="topbar-title" id="topbar-title">Calendar</div>
-          <div class="topbar-sub">Appointment Diary</div>
-        </div>
+    <!-- ── PAGE SUB-BAR (page title + tabs + new slot) ── -->
+    <div class="page-subbar">
+      <div class="page-titles">
+        <div class="page-title" id="topbar-title">Calendar</div>
+        <div class="page-sub">Appointment Diary</div>
+      </div>
+      <div class="page-actions">
         <div class="tab-group">
           <button class="tab-btn active" data-tab="calendar">Calendar</button>
           <button class="tab-btn" data-tab="slots">Manage Slots</button>
           <button class="tab-btn" data-tab="bookings">Bookings</button>
-          <button class="tab-btn" data-tab="templates">&#9993; Templates</button>
         </div>
+        <button class="btn-new-slot-pill" id="header-new-slot-btn" type="button">+ New Slot</button>
       </div>
+    </div>
+
+    <!-- Hidden anchors so legacy code that writes to sidebar elements
+         (renderSidebarMetrics, renderSidebarBookings) doesn't throw. -->
+    <div style="display:none" aria-hidden="true">
+      <span id="sb-initials"></span>
+      <span id="sb-name"></span>
+      <span id="sb-month-label"></span>
+      <span id="m-total"></span><span id="m-booked"></span>
+      <span id="m-avail"></span><span id="m-cancel"></span>
+      <div id="sb-bookings-list"></div>
+    </div>
+
+    <!-- ── PAGE BODY ── -->
+    <main class="page-body right-panel">
 
       <!-- ── CALENDAR TAB ── -->
       <div id="tab-calendar" class="main-area">
@@ -825,35 +1194,23 @@ textarea { resize: vertical; min-height: 68px; }
             <div class="cal-body" id="cal-body"></div>
           </div>
 
-          <!-- Right col: day detail -->
-          <div class="right-col">
-            <div class="panel-card" id="day-detail-card">
-              <div class="day-detail-head">
-                <div>
-                  <div class="day-detail-title" id="detail-day-title">Select a date</div>
-                  <div class="day-detail-sub" id="detail-day-sub">Click any date on the calendar</div>
-                </div>
-              </div>
-              <div class="day-detail-body" id="day-detail-body">
-                <div style="text-align:center;padding:18px 0;color:var(--muted);font-size:12px">No date selected.</div>
-              </div>
+          <!-- Right col: dark-navy day detail (split view) -->
+          <aside class="day-detail-pane" id="day-detail-card">
+            <div class="ddp-head">
+              <div class="ddp-eyebrow" id="detail-day-sub">Click any date on the calendar</div>
+              <div class="ddp-title" id="detail-day-title">Select a date</div>
             </div>
-
-            <div class="panel-card">
-              <div class="panel-head">
-                <div class="panel-title">Send Invitation</div>
-                <span class="panel-action" id="panel-open-invite-btn">Choose slots &rarr;</span>
-              </div>
-              <div class="panel-body">
-                <div class="fg" style="margin-bottom:0">
-                  <label>Search Customer</label>
-                  <input type="text" id="quick-cust-q" placeholder="Type name or account code&hellip;" autocomplete="off">
-                  <div class="cust-results" id="quick-cust-results" style="display:none"></div>
-                  <div id="quick-cust-sel" style="display:none" class="cust-selected"></div>
-                </div>
-                <button class="btn btn-primary" style="width:100%;margin-top:10px;justify-content:center" id="quick-invite-btn">Choose Slots &amp; Send &rarr;</button>
-              </div>
+            <div class="ddp-body" id="day-detail-body">
+              <div class="ddp-empty">No date selected.</div>
             </div>
+          </aside>
+          <!-- Hidden anchors for legacy quick-invite handlers (panel was removed). -->
+          <div style="display:none" aria-hidden="true">
+            <span id="panel-open-invite-btn"></span>
+            <input type="text" id="quick-cust-q">
+            <div id="quick-cust-results"></div>
+            <div id="quick-cust-sel"></div>
+            <button id="quick-invite-btn"></button>
           </div>
         </div>
       </div>
@@ -880,25 +1237,9 @@ textarea { resize: vertical; min-height: 68px; }
         <div id="bookings-list"></div>
       </div>
 
-      <!-- ── TEMPLATES TAB ── -->
-      <div id="tab-templates" class="main-area" style="display:none">
-        <div class="templates-header">
-          <div>
-            <div class="templates-title">Email Templates</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:3px">Templates control the subject line and body of invitation emails sent to customers.</div>
-          </div>
-          <button class="btn btn-gold" id="tpl-new-btn">+ New Template</button>
-        </div>
-        <div class="template-grid" id="template-grid">
-          <div class="empty" style="grid-column:1/-1">
-            <div class="empty-icon">&#9993;</div>
-            <div class="empty-title">No templates yet</div>
-            <div class="empty-desc">Create your first email template to get started.</div>
-          </div>
-        </div>
-      </div>
+      <!-- Templates editor was moved to the admin portal under Settings -> Templates (May 2026). -->
 
-    </div><!-- end right-panel -->
+    </main><!-- end .page-body / right-panel -->
   </div><!-- end app-layout -->
 </div><!-- end #app -->
 
@@ -948,51 +1289,79 @@ textarea { resize: vertical; min-height: 68px; }
      MODAL: Send Invitation
 ══════════════════════════════════ -->
 <div class="modal-bg" id="m-invite">
-  <div class="modal">
+  <div class="modal modal-invite">
     <div class="modal-hdr">
-      <div class="modal-hdr-title">Send Booking Invitation</div>
+      <div>
+        <div class="modal-hdr-title">Send Booking Invitation</div>
+        <div class="modal-hdr-sub">Configure on the left. The preview on the right updates as you go.</div>
+      </div>
       <button class="modal-x" id="m-invite-close">&#x2715;</button>
     </div>
-    <div class="modal-body">
-      <div class="fg">
-        <label>Email Template <span style="color:var(--coral)">*</span></label>
-        <div id="tpl-picker" style="border:1.5px solid var(--border-lt);border-radius:7px;max-height:200px;overflow-y:auto;padding:6px 8px">
-          <div style="text-align:center;padding:14px;color:var(--muted);font-size:12px">Loading templates&hellip;</div>
+    <div class="modal-body inv-split">
+
+      <!-- ── LEFT: form rail ── -->
+      <div class="inv-form-pane">
+
+        <div class="inv-section">
+          <h3><span class="inv-step">1</span>Template</h3>
+          <div id="tpl-picker" style="border:1.5px solid var(--border-lt);border-radius:7px;max-height:200px;overflow-y:auto;padding:6px 8px;background:#fff">
+            <div style="text-align:center;padding:14px;color:var(--muted);font-size:12px">Loading templates&hellip;</div>
+          </div>
+          <!-- Hidden anchors retained for legacy JS compatibility -->
+          <div id="tpl-subject-preview" style="display:none"><span id="tpl-subject-text"></span></div>
         </div>
-        <div id="tpl-subject-preview" style="display:none;margin-top:6px;padding:8px 10px;background:var(--off);border-radius:6px;font-size:11px;color:var(--muted)">
-          <strong style="color:var(--text)">Subject:</strong> <span id="tpl-subject-text"></span>
+
+        <div class="inv-section">
+          <h3><span class="inv-step">2</span>Customer</h3>
+          <div class="fg">
+            <label>Search Customer</label>
+            <input type="text" id="cust-q" placeholder="Type name or account code&hellip;" autocomplete="off">
+            <div class="cust-results" id="cust-results" style="display:none"></div>
+            <div id="cust-sel-display" style="display:none" class="cust-selected"></div>
+          </div>
+          <div class="fg-row">
+            <div class="fg">
+              <label>First Name</label>
+              <input type="text" id="inv-first" placeholder="First name" autocomplete="off">
+            </div>
+            <div class="fg">
+              <label>Last Name</label>
+              <input type="text" id="inv-last" placeholder="Last name" autocomplete="off">
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin:-10px 0 14px">Used in email communications only - not saved to database.</div>
+          <div class="fg" style="margin-bottom:0">
+            <label>Customer Email</label>
+            <input type="email" id="inv-email" placeholder="customer@example.com" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="inv-section">
+          <h3><span class="inv-step">3</span>Appointment Slots to Offer</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">The customer will choose from these available slots.</div>
+          <div class="slot-picker slot-picker-grid" id="slot-picker"></div>
+          <!-- Legacy link preview kept hidden so previewLink() doesn't throw -->
+          <div id="link-preview-wrap" style="display:none">
+            <div class="link-preview" id="link-preview"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── RIGHT: live email preview ── -->
+      <div class="inv-preview-pane">
+        <div class="inv-preview-toolbar">
+          <div class="inv-preview-meta">
+            <strong>To:</strong> <span id="inv-preview-to">customer@example.com</span>
+            <span class="inv-preview-sep"> &middot; </span>
+            <strong>Subject:</strong> <span id="inv-preview-subject">-</span>
+          </div>
+        </div>
+        <div class="inv-preview-canvas">
+          <iframe id="inv-email-iframe" sandbox="allow-same-origin" title="Email preview"></iframe>
         </div>
       </div>
-      <div class="fg">
-        <label>Search Customer</label>
-        <input type="text" id="cust-q" placeholder="Type name or account code&hellip;" autocomplete="off">
-        <div class="cust-results" id="cust-results" style="display:none"></div>
-        <div id="cust-sel-display" style="display:none" class="cust-selected"></div>
-      </div>
-      <div class="fg-row">
-        <div class="fg">
-          <label>First Name</label>
-          <input type="text" id="inv-first" placeholder="First name" autocomplete="off">
-        </div>
-        <div class="fg">
-          <label>Last Name</label>
-          <input type="text" id="inv-last" placeholder="Last name" autocomplete="off">
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:-10px;margin-bottom:14px">Used in email communications only &mdash; not saved to database.</div>
-      <div class="fg">
-        <label>Customer Email</label>
-        <input type="email" id="inv-email" placeholder="customer@example.com" autocomplete="off">
-      </div>
-      <div class="fg">
-        <label>Select Slots to Offer</label>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">The customer will choose from these available slots.</div>
-        <div class="slot-picker" id="slot-picker"></div>
-      </div>
-      <div class="fg" id="link-preview-wrap" style="display:none">
-        <label>Booking Link (generated on send)</label>
-        <div class="link-preview" id="link-preview"></div>
-      </div>
+
     </div>
     <div class="modal-ftr">
       <button class="btn btn-ghost" id="m-invite-cancel">Cancel</button>
@@ -1021,48 +1390,7 @@ textarea { resize: vertical; min-height: 68px; }
 <!-- ══════════════════════════════════
      MODAL: Create / Edit Template
 ══════════════════════════════════ -->
-<div class="modal-bg" id="m-template">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div class="modal-hdr-title" id="tpl-modal-title">New Email Template</div>
-      <button class="modal-x" id="m-template-close">&#x2715;</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="tpl-edit-id">
-      <div class="fg">
-        <label>Template Name <span style="color:var(--coral)">*</span></label>
-        <input type="text" id="tpl-name" placeholder="e.g. AW27 Apparel Prebook Presentation, Service Call">
-      </div>
-      <div class="fg">
-        <label>Email Subject Line <span style="color:var(--coral)">*</span></label>
-        <input type="text" id="tpl-subject" placeholder="e.g. FootJoy &mdash; Please Choose Your Appointment Time">
-      </div>
-      <div class="fg">
-        <label>Email Heading</label>
-        <input type="text" id="tpl-heading" placeholder="e.g. Prebook Appointment Invitation">
-      </div>
-      <div class="fg">
-        <label>Intro Text (HTML supported) <span style="color:var(--coral)">*</span></label>
-        <textarea id="tpl-intro" rows="6" placeholder="Write the opening paragraph(s) of the email. The appointment slots table and booking button are added automatically below this text."></textarea>
-        <div class="placeholder-hints">
-          <strong style="color:var(--text)">Supported placeholders:</strong><br>
-          <code>{{customer_name}}</code> &mdash; replaced with the customer's name<br>
-          <code>{{am_name}}</code> &mdash; replaced with the account manager's name
-        </div>
-      </div>
-      <div class="fg" style="margin-bottom:0">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--text)">
-          <input type="checkbox" id="tpl-active" checked style="width:15px;height:15px;accent-color:var(--gold-dk)">
-          Template is active (visible when sending invitations)
-        </label>
-      </div>
-    </div>
-    <div class="modal-ftr">
-      <button class="btn btn-ghost" id="m-template-cancel">Cancel</button>
-      <button class="btn btn-gold" id="m-template-save">Save Template</button>
-    </div>
-  </div>
-</div>
+<!-- Email-template editor moved to the admin portal under Settings -> Templates (May 2026). -->
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>

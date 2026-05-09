@@ -88,13 +88,16 @@ function goBackToPrebook(ev) {
   const forgotEl= document.getElementById('login-forgot');
   const errEl   = document.getElementById('login-error');
 
-  // Check for existing session on page load (skip if SSO bypass already handled login)
+  // Check for existing session on page load (skip if SSO bypass already handled login).
+  // Login screen is hidden by default; only reveal it if there's no usable session,
+  // so users coming from the home screen go straight to the diary without a flash.
   async function checkExistingSession() {
     if (window._diaryBypassActive) return;
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
       await loginWithSession(session);
     } else {
+      document.getElementById('login-screen').classList.add('visible');
       emailEl.focus();
     }
   }
@@ -106,6 +109,9 @@ function goBackToPrebook(ev) {
       .from('salespeople').select('*').eq('email', userEmail).single();
 
     if (error || !sp) {
+      // Auth session exists but no salesperson record. Surface the login
+      // screen so the error message is actually visible.
+      document.getElementById('login-screen').classList.add('visible');
       errEl.textContent = 'Account not linked to a salesperson. Contact your admin.';
       await sb.auth.signOut();
       return;
@@ -190,6 +196,11 @@ async function loadData() {
   renderBookings();
   renderSidebarMetrics();
   renderSidebarBookings();
+  // Default the day-pane to today on first load so the user lands on a
+  // populated timeline rather than the "Select a date" empty state.
+  if (!calSelDate) {
+    selectDay(new Date().toISOString().slice(0, 10));
+  }
   await loadTemplates();
 }
 
@@ -199,7 +210,9 @@ async function loadTemplates() {
     toast('Could not load email templates. Please refresh and try again.', 'error');
   }
   templates = data || [];
-  renderTemplates();
+  // Templates are now edited in the admin portal; the diary only needs
+  // the loaded list to populate the Send Invitation picker (rendered
+  // on demand by renderTemplatePicker when the invite modal opens).
 }
 
 async function loadCustomers() {
@@ -289,8 +302,9 @@ function renderSidebarBookings() {
 // TABS
 // ═══════════════════════════════════════════════
 function switchTab(name, btn) {
-  ['calendar','slots','bookings','templates'].forEach(t => {
-    document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
+  ['calendar','slots','bookings'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = (t === name) ? 'block' : 'none';
   });
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
@@ -298,7 +312,7 @@ function switchTab(name, btn) {
   // (Calendar nav buttons now live inside the calendar card itself,
   // so they hide/show automatically with the tab.)
 
-  const labels = { calendar: 'Calendar', slots: 'Manage Slots', bookings: 'Confirmed Bookings', templates: 'Email Templates' };
+  const labels = { calendar: 'Calendar', slots: 'Manage Slots', bookings: 'Confirmed Bookings' };
   document.getElementById('topbar-title').textContent = labels[name] || '';
 }
 
@@ -336,7 +350,7 @@ function renderCal() {
     return by === y && bm - 1 === m && b.status === 'confirmed';
   }).length;
   document.getElementById('cal-card-sub').textContent =
-    `${bookedThisMonth} confirmed booking${bookedThisMonth !== 1 ? 's' : ''} this month &mdash; click a date to view details`;
+    `${bookedThisMonth} confirmed booking${bookedThisMonth !== 1 ? 's' : ''} this month - click a date to view details`;
 
   const firstDOW = new Date(y, m, 1).getDay();
   const leadDays = (firstDOW + 6) % 7; // Mon-based
@@ -436,50 +450,120 @@ function renderCal() {
   }
 }
 
+// Hours to render in the day timeline (8 AM through 5 PM).
+const TIMELINE_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+function timelineHourLabel(h) {
+  if (h === 12) return '12 PM';
+  if (h > 12)   return (h - 12) + ' PM';
+  return h + ' AM';
+}
+function statusClass(status) {
+  return status === 'booked' ? 'booked' : 'avail';
+}
+function durationMin(start, end) {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
+
 function selectDay(key) {
   calSelDate = key;
   renderCal();
 
-  const d   = new Date(key + 'T00:00:00');
-  const lbl = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
-  const daySlots = slots.filter(s => s.date === key && s.status !== 'cancelled');
+  const d         = new Date(key + 'T00:00:00');
+  const fullLbl   = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const eyebrow   = d.toLocaleDateString('en-AU', { weekday: 'long' })
+                  + ' · '
+                  + d.toLocaleDateString('en-AU', { month: 'short' });
+  const todayKey  = new Date().toISOString().slice(0, 10);
+  const isPast    = key < todayKey;
 
-  document.getElementById('detail-day-title').textContent = lbl;
-  document.getElementById('detail-day-sub').textContent   =
-    daySlots.length === 0 ? 'No appointments' :
-    `${daySlots.length} appointment${daySlots.length !== 1 ? 's' : ''}`;
+  const daySlots = slots
+    .filter(s => s.date === key && s.status !== 'cancelled')
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
-  const body = document.getElementById('day-detail-body');
-  if (daySlots.length === 0) {
-    body.innerHTML = `<div style="text-align:center;padding:16px 0;color:var(--muted);font-size:12px">
-      No appointments on this date.
-      <div style="margin-top:6px"><button class="btn btn-gold btn-sm" data-action="openCreateSlot" data-id="${key}">+ Add Slot</button></div>
+  const confirmed = daySlots.filter(s => s.status === 'booked').length;
+  const available = daySlots.filter(s => s.status === 'available').length;
+
+  document.getElementById('detail-day-title').textContent = fullLbl;
+  document.getElementById('detail-day-sub').textContent   = eyebrow;
+
+  // Build the hour-by-hour timeline. Each row is keyed to a wall-clock
+  // hour. Slots that start within that hour stack inside the row's
+  // content column. Hours with no slot show a "+ Add slot" placeholder
+  // (or a dimmed dash for past dates).
+  const slotsByHour = {};
+  TIMELINE_HOURS.forEach(h => slotsByHour[h] = []);
+  daySlots.forEach(s => {
+    const h = parseInt(s.start_time.split(':')[0], 10);
+    if (slotsByHour[h]) slotsByHour[h].push(s);
+    else {
+      // Out-of-range slot (e.g. 7 AM or 7 PM): tack onto nearest bound.
+      const target = h < TIMELINE_HOURS[0] ? TIMELINE_HOURS[0]
+                   : TIMELINE_HOURS[TIMELINE_HOURS.length - 1];
+      slotsByHour[target].push(s);
+    }
+  });
+
+  const summary = daySlots.length === 0
+    ? 'No slots yet on this day'
+    : `${confirmed} confirmed${available ? ' · ' + available + ' available' : ''}`;
+
+  let html = `<div class="ddp-meta-line">${summary}</div>`;
+  html += '<div class="ddp-timeline">';
+
+  TIMELINE_HOURS.forEach(hour => {
+    const inHour = slotsByHour[hour];
+    let inner;
+    if (inHour.length === 0) {
+      inner = isPast
+        ? '<div class="ddp-row-empty disabled">&mdash;</div>'
+        : `<div class="ddp-row-empty" data-action="openCreateSlotAt" data-date="${key}" data-hour="${hour}">+ Add slot</div>`;
+    } else {
+      inner = inHour.map(s => {
+        const bk = s.status === 'booked'
+          ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
+          : null;
+        const cls   = statusClass(s.status);
+        const title = bk ? escHtml(bk.customer_name)
+                         : (s.location ? escHtml(s.location) : 'Available');
+        const dur   = durationMin(s.start_time, s.end_time);
+        const isOnHour = /:00$/.test(s.start_time);
+        const metaParts = [];
+        if (!isOnHour) metaParts.push(fmt(s.start_time));
+        if (bk) {
+          if (bk.customer_email) metaParts.push(escHtml(bk.customer_email));
+          if (s.location)        metaParts.push(escHtml(s.location));
+        } else if (s.location && !isOnHour) {
+          metaParts.push(escHtml(s.location));
+        }
+        if (dur) metaParts.push(dur + ' min');
+        const meta = metaParts.join(' · ');
+        const status = bk
+          ? '<div class="ds-status booked">● Confirmed</div>'
+          : '<div class="ds-status avail">No invitation sent yet</div>';
+        const action = bk
+          ? `data-action="showDetail" data-id="${bk.id}"`
+          : `data-action="openInvite" data-id="${s.id}"`;
+        return `<div class="detail-slot timeline ${cls}" ${action}>
+          <div class="ds-bar ${cls}"></div>
+          <div class="ds-body">
+            <div class="ds-name">${title}</div>
+            ${meta ? `<div class="ds-meta">${meta}</div>` : ''}
+            ${status}
+          </div>
+        </div>`;
+      }).join('');
+    }
+    html += `<div class="ddp-row">
+      <div class="ddp-hour">${timelineHourLabel(hour)}</div>
+      <div class="ddp-row-content">${inner}</div>
     </div>`;
-    return;
-  }
+  });
 
-  body.innerHTML = daySlots.map(s => {
-    const bk = s.status === 'booked'
-      ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
-      : null;
-    const name = bk ? escHtml(bk.customer_name) : (s.status === 'available' ? 'Available' : 'Open');
-    const meta = bk
-      ? (escHtml(bk.customer_email) + (s.location ? ' &mdash; ' + escHtml(s.location) : ''))
-      : (escHtml(s.location) || 'No location set');
-    const actionBtn = bk
-      ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px" data-action="showDetail" data-id="${bk.id}">View &rarr;</button>`
-      : `<button class="btn btn-gold btn-sm" style="margin-top:6px" data-action="openInvite" data-id="${s.id}">Send Invite</button>`;
-    return `<div class="detail-slot">
-      <div class="ds-bar ${s.status}"></div>
-      <div class="ds-body">
-        <div class="ds-time">${fmt(s.start_time)} &ndash; ${fmt(s.end_time)}</div>
-        <div class="ds-name">${name}</div>
-        <div class="ds-meta">${meta}</div>
-        ${actionBtn}
-      </div>
-      <span class="ds-badge ${s.status}">${s.status === 'booked' ? 'Confirmed' : 'Available'}</span>
-    </div>`;
-  }).join('');
+  html += '</div>';
+  document.getElementById('day-detail-body').innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════
@@ -605,12 +689,19 @@ function showDetail(bookingId) {
 // ═══════════════════════════════════════════════
 // CREATE SLOT
 // ═══════════════════════════════════════════════
-function openCreateSlot(prefillDate) {
+function openCreateSlot(prefillDate, prefillStartHour) {
   const today = new Date().toISOString().slice(0,10);
   document.getElementById('c-date').min   = today;
   document.getElementById('c-date').value = prefillDate || '';
-  document.getElementById('c-start').value = '09:00';
-  document.getElementById('c-end').value   = '10:00';
+  if (prefillStartHour !== undefined && prefillStartHour !== null && !Number.isNaN(prefillStartHour)) {
+    const h = parseInt(prefillStartHour, 10);
+    const pad = (n) => String(n).padStart(2, '0');
+    document.getElementById('c-start').value = `${pad(h)}:00`;
+    document.getElementById('c-end').value   = `${pad(Math.min(h + 1, 23))}:00`;
+  } else {
+    document.getElementById('c-start').value = '09:00';
+    document.getElementById('c-end').value   = '10:00';
+  }
   document.getElementById('c-loc').value   = '';
   document.getElementById('c-notes').value = '';
   openM('m-create');
@@ -651,82 +742,10 @@ async function doCancel(slotId) {
 // ═══════════════════════════════════════════════
 // TEMPLATES
 // ═══════════════════════════════════════════════
-function renderTemplates() {
-  const g = document.getElementById('template-grid');
-  if (!g) return;
-  if (templates.length === 0) {
-    g.innerHTML = `<div class="empty" style="grid-column:1/-1">
-      <div class="empty-icon">&#9993;</div>
-      <div class="empty-title">No templates yet</div>
-      <div class="empty-desc">Create your first email template to get started.</div>
-    </div>`;
-    return;
-  }
-  g.innerHTML = templates.map(t => {
-    // Strip HTML tags for preview
-    const introPreview = t.intro_text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) + '&hellip;';
-    return `<div class="template-card${t.is_active ? '' : ' inactive'}">
-      <div class="tpl-name">${escHtml(t.name)}</div>
-      <div class="tpl-subject"><strong>Subject:</strong> ${escHtml(t.email_subject)}</div>
-      <div class="tpl-intro">${introPreview}</div>
-      <div class="tpl-footer">
-        <span class="tpl-badge ${t.is_active ? 'active' : 'inactive'}">${t.is_active ? 'Active' : 'Inactive'}</span>
-        <div class="tpl-actions">
-          <button class="btn btn-ghost btn-sm" data-action="openCreateTemplate" data-id="${t.id}">Edit</button>
-          <button class="btn btn-danger btn-sm" data-action="deleteTemplate" data-id="${t.id}">Delete</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function openCreateTemplate(id) {
-  const tpl = id ? templates.find(t => t.id === id) : null;
-  document.getElementById('tpl-modal-title').textContent = tpl ? 'Edit Template' : 'New Email Template';
-  document.getElementById('tpl-edit-id').value   = tpl?.id || '';
-  document.getElementById('tpl-name').value      = tpl?.name || '';
-  document.getElementById('tpl-subject').value   = tpl?.email_subject || '';
-  document.getElementById('tpl-heading').value   = tpl?.heading || 'Prebook Appointment Invitation';
-  document.getElementById('tpl-intro').value     = tpl?.intro_text || '<p>Hi {{customer_name}},</p>\n<p><strong>{{am_name}}</strong> would like to invite you to an appointment.</p>';
-  document.getElementById('tpl-active').checked = tpl ? tpl.is_active : true;
-  openM('m-template');
-}
-
-async function saveTemplate() {
-  const id      = document.getElementById('tpl-edit-id').value;
-  const name    = document.getElementById('tpl-name').value.trim();
-  const subject = document.getElementById('tpl-subject').value.trim();
-  const heading = document.getElementById('tpl-heading').value.trim() || 'Prebook Appointment Invitation';
-  const intro   = document.getElementById('tpl-intro').value.trim();
-  const active  = document.getElementById('tpl-active').checked;
-
-  if (!name)    { toast('Template name is required.', 'error'); return; }
-  if (!subject) { toast('Email subject is required.', 'error'); return; }
-  if (!intro)   { toast('Intro text is required.', 'error'); return; }
-
-  const payload = { name, email_subject: subject, heading, intro_text: intro, is_active: active };
-
-  let error;
-  if (id) {
-    ({ error } = await sb.from('email_templates').update(payload).eq('id', id));
-  } else {
-    ({ error } = await sb.from('email_templates').insert(payload));
-  }
-  if (error) { toast('Error saving template. Please try again.', 'error'); return; }
-
-  closeM('m-template');
-  await loadTemplates();
-  toast(id ? 'Template updated!' : 'Template created!', 'success');
-}
-
-async function deleteTemplate(id) {
-  const tpl = templates.find(t => t.id === id);
-  if (!confirm(`Delete template "${tpl?.name}"? This cannot be undone.`)) return;
-  const { error } = await sb.from('email_templates').delete().eq('id', id);
-  if (error) { toast('Error deleting template.', 'error'); return; }
-  await loadTemplates();
-  toast('Template deleted.', 'success');
-}
+// Template editing (renderTemplates / openCreateTemplate / saveTemplate /
+// deleteTemplate) moved to the admin portal under Settings -> Templates.
+// The diary still loads the template list (loadTemplates above) so
+// renderTemplatePicker below can populate the Send Invitation modal.
 
 // Populate template picker inside the invite modal
 function renderTemplatePicker() {
@@ -737,8 +756,8 @@ function renderTemplatePicker() {
   if (!picker) return;
   if (active.length === 0) {
     const msg = templates.length === 0
-      ? 'No templates found. <a href="#" data-action="switchToTemplatesTab" data-mode="create" style="color:var(--black);font-weight:700">Create one &rarr;</a>'
-      : 'All templates are marked inactive. <a href="#" data-action="switchToTemplatesTab" data-mode="activate" style="color:var(--black);font-weight:700">Activate one &rarr;</a>';
+      ? 'No templates found. Create one in the admin portal under Settings -> Templates.'
+      : 'All templates are marked inactive. Activate one in the admin portal under Settings -> Templates.';
     picker.innerHTML = `<div style="text-align:center;padding:14px;color:var(--muted);font-size:12px">${msg}</div>`;
     selectedTplId = null;
     return;
@@ -746,10 +765,7 @@ function renderTemplatePicker() {
   picker.innerHTML = active.map(t => `
     <label class="tpl-select-row${selectedTplId === t.id ? ' selected' : ''}" id="tpl-row-${t.id}">
       <input type="radio" name="tpl-sel" value="${t.id}" ${selectedTplId === t.id ? 'checked' : ''} data-action="tplSelect" data-tpl-id="${t.id}" data-index="${t.id}">
-      <div>
-        <div class="tpl-select-name">${escHtml(t.name)}</div>
-        <div class="tpl-select-subject">${escHtml(t.email_subject)}</div>
-      </div>
+      <div class="tpl-select-name">${escHtml(t.name)}</div>
     </label>`).join('');
 
   // Auto-select first if nothing selected yet
@@ -767,6 +783,7 @@ function onTplSelect(id) {
   const row = document.getElementById('tpl-row-' + id);
   if (row) row.classList.add('selected');
   updateSubjectPreview();
+  renderInvitePreview();
 }
 
 function updateSubjectPreview() {
@@ -837,6 +854,7 @@ function openInvite(slotId) {
     }).join('');
   }
   previewLink();
+  renderInvitePreview();
   openM('m-invite');
 }
 
@@ -876,6 +894,7 @@ function pickCust(idx) {
   document.getElementById('inv-first').value = inviteSelCust.contact_first || '';
   document.getElementById('inv-last').value  = inviteSelCust.contact_last  || '';
   if (inviteSelCust.contact_email) document.getElementById('inv-email').value = inviteSelCust.contact_email;
+  renderInvitePreview();
 }
 
 // Quick search (sidebar invite shortcut)
@@ -909,12 +928,61 @@ function pickQuickCust(idx) {
   disp.style.display = 'block';
 }
 
+// Build the table rows for the invite email's slot list.
+// Used by both the live preview (renderInvitePreview) and the real send.
+function buildInviteSlotRows(offered) {
+  return offered.map(s => {
+    const d  = new Date(s.date + 'T00:00:00');
+    const dl = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${dl}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${fmt(s.start_time)}&ndash;${fmt(s.end_time)}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${escHtml(s.location||'')}</td></tr>`;
+  }).join('');
+}
+
+// Live render the email preview iframe + subject/to bar from current modal state.
+function renderInvitePreview() {
+  const iframe = document.getElementById('inv-email-iframe');
+  if (!iframe) return; // older HTML without preview pane
+
+  const tpl = templates.find(t => t.id === selectedTplId);
+  const fname = (document.getElementById('inv-first')?.value || '').trim();
+  const lname = (document.getElementById('inv-last')?.value  || '').trim();
+  const custName = [fname, lname].filter(Boolean).join(' ')
+    || (inviteSelCust ? inviteSelCust.account_name : 'Customer');
+  const email = (document.getElementById('inv-email')?.value || '').trim()
+    || (inviteSelCust?.contact_email || 'customer@example.com');
+
+  // Subject + to line
+  const subjectEl = document.getElementById('inv-preview-subject');
+  const toEl      = document.getElementById('inv-preview-to');
+  if (subjectEl) {
+    subjectEl.textContent = tpl
+      ? replacePlaceholders(tpl.email_subject || '', { customer_name: custName, am_name: me?.name || '' })
+      : '(pick a template)';
+  }
+  if (toEl) toEl.textContent = email;
+
+  // Selected slots
+  const selIds = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')].map(cb => cb.value);
+  const offered = slots.filter(s => selIds.includes(s.id));
+  let slotRows = buildInviteSlotRows(offered);
+  if (!slotRows) {
+    slotRows = `<tr><td colspan="3" style="padding:14px;color:#999;text-align:center;font-style:italic">No slots selected yet</td></tr>`;
+  }
+
+  const html = inviteEmailHTML(custName, me?.name || '', slotRows, '#preview', tpl);
+  iframe.srcdoc = html;
+}
+
 function previewLink() {
   const chk  = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')];
   const wrap = document.getElementById('link-preview-wrap');
+  // Update the live email preview alongside the legacy link box.
+  renderInvitePreview();
+  if (!wrap) return;
   if (chk.length > 0) {
     const base = window.location.href.replace(/[^/]*$/, '') + 'booking.html';
-    document.getElementById('link-preview').textContent = base + '?token=(generated when you click Send)';
+    const linkEl = document.getElementById('link-preview');
+    if (linkEl) linkEl.textContent = base + '?token=(generated when you click Send)';
     wrap.style.display = 'block';
   } else {
     wrap.style.display = 'none';
@@ -1227,18 +1295,13 @@ document.addEventListener('click', function(e) {
   if (action === 'showDetail') showDetail(el.dataset.id);
   else if (action === 'openInvite') openInvite(el.dataset.id);
   else if (action === 'openCreateSlot') openCreateSlot(el.dataset.id);
+  else if (action === 'openCreateSlotAt') openCreateSlot(el.dataset.date, el.dataset.hour);
   else if (action === 'doCancel') doCancel(el.dataset.id);
   else if (action === 'dlICS') dlICS(el.dataset.id);
-  else if (action === 'openCreateTemplate') openCreateTemplate(el.dataset.id);
-  else if (action === 'deleteTemplate') deleteTemplate(el.dataset.id);
   else if (action === 'pickCust') pickCust(parseInt(el.dataset.index, 10));
   else if (action === 'pickQuickCust') pickQuickCust(parseInt(el.dataset.index, 10));
-  else if (action === 'switchToTemplatesTab') {
-    e.preventDefault();
-    closeM('m-invite');
-    const tabBtn = document.querySelectorAll('.tab-btn')[3];
-    switchTab('templates', tabBtn);
-  }
+  // openCreateTemplate / deleteTemplate / switchToTemplatesTab removed
+  // when the Templates tab moved to the admin portal (May 2026).
 });
 
 document.addEventListener('change', function(e) {
@@ -1252,12 +1315,57 @@ document.addEventListener('change', function(e) {
 // DIRECT EVENT LISTENERS (static elements)
 // ═══════════════════════════════════════════════
 
-// Back button
-document.getElementById('sb-back-btn').addEventListener('click', goBackToPrebook);
+// Back to home (hamburger menu item)
+const fjBackBtn = document.getElementById('fj-back-home-btn');
+if (fjBackBtn) fjBackBtn.addEventListener('click', goBackToPrebook);
+// Legacy sidebar back button (kept for older HTML; no-op when removed)
+const sbBack = document.getElementById('sb-back-btn');
+if (sbBack) sbBack.addEventListener('click', goBackToPrebook);
 
-// New slot buttons
-document.getElementById('sb-new-slot-btn').addEventListener('click', () => openCreateSlot(null));
-document.getElementById('slots-new-btn').addEventListener('click', () => openCreateSlot(null));
+// Sign out (hamburger menu item)
+const fjSignOut = document.getElementById('fj-sign-out-btn');
+if (fjSignOut) fjSignOut.addEventListener('click', async () => {
+  await sb.auth.signOut();
+  window.location.reload();
+});
+
+// Hamburger menu open/close
+const fjMenuBtn = document.getElementById('fj-menu-btn');
+const fjMenu    = document.getElementById('fj-menu');
+if (fjMenuBtn && fjMenu) {
+  fjMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = fjMenu.hasAttribute('hidden');
+    if (isHidden) {
+      fjMenu.removeAttribute('hidden');
+      fjMenuBtn.setAttribute('aria-expanded', 'true');
+      // Populate identity if available
+      const nameEl  = document.getElementById('fj-menu-name');
+      const emailEl = document.getElementById('fj-menu-email');
+      if (typeof me !== 'undefined' && me) {
+        if (nameEl)  nameEl.textContent  = me.name  || '';
+        if (emailEl) emailEl.textContent = me.email || '';
+      }
+    } else {
+      fjMenu.setAttribute('hidden', '');
+      fjMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!fjMenu.hasAttribute('hidden') && !fjMenu.contains(e.target) && e.target !== fjMenuBtn) {
+      fjMenu.setAttribute('hidden', '');
+      fjMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+// New slot buttons (header pill + Manage Slots tab + legacy sidebar)
+const headerNewSlot = document.getElementById('header-new-slot-btn');
+if (headerNewSlot) headerNewSlot.addEventListener('click', () => openCreateSlot(null));
+const sbNewSlot = document.getElementById('sb-new-slot-btn');
+if (sbNewSlot) sbNewSlot.addEventListener('click', () => openCreateSlot(null));
+const slotsNewBtn = document.getElementById('slots-new-btn');
+if (slotsNewBtn) slotsNewBtn.addEventListener('click', () => openCreateSlot(null));
 
 // Tab buttons
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1287,8 +1395,8 @@ document.querySelectorAll('.filter-pills .pill').forEach(pill => {
   });
 });
 
-// New template button
-document.getElementById('tpl-new-btn').addEventListener('click', () => openCreateTemplate(null));
+// (Template editor moved to the admin portal under Settings -> Templates;
+//  the +New Template button and m-template modal are no longer here.)
 
 // Modal close buttons
 document.getElementById('m-create-close').addEventListener('click', () => closeM('m-create'));
@@ -1302,13 +1410,15 @@ document.getElementById('m-invite-send').addEventListener('click', sendInvite);
 document.getElementById('m-detail-close').addEventListener('click', () => closeM('m-detail'));
 document.getElementById('m-detail-close-btn').addEventListener('click', () => closeM('m-detail'));
 
-document.getElementById('m-template-close').addEventListener('click', () => closeM('m-template'));
-document.getElementById('m-template-cancel').addEventListener('click', () => closeM('m-template'));
-document.getElementById('m-template-save').addEventListener('click', saveTemplate);
-
 // Customer search in invite modal
 document.getElementById('cust-q').addEventListener('input', function() {
   custSearch(this.value);
+});
+
+// Live email preview: re-render when the user edits the customer fields.
+['inv-first', 'inv-last', 'inv-email'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', renderInvitePreview);
 });
 
 // F07: Idle timeout - sign out after 30 minutes of inactivity

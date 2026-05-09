@@ -550,14 +550,17 @@ async function fetchNextMilestone() {
 function renderNextMilestone(m) {
   if (!m) {
     setText('stat-milestone', 'Coming soon');
+    setText('stat-milestone-date', '');
     setText('stat-milestone-sub', 'Set a milestone in Admin / Settings to highlight an upcoming deadline.');
     return;
   }
   setText('stat-milestone', m.title || '(untitled milestone)');
-  const dateStr = m.milestone_date
-    ? new Date(m.milestone_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+  // Compact date shown next to the "Next milestone" label (e.g. 14 Jun)
+  const dateChip = m.milestone_date
+    ? new Date(m.milestone_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
     : '';
-  // Days remaining
+  setText('stat-milestone-date', dateChip);
+  // Days remaining for the sub line
   let daysLine = '';
   if (m.milestone_date) {
     const diffMs = new Date(m.milestone_date) - new Date(new Date().toISOString().slice(0, 10));
@@ -566,8 +569,7 @@ function renderNextMilestone(m) {
     else if (days === 1) daysLine = ' · Tomorrow';
     else daysLine = ' · ' + days + ' days to go';
   }
-  const descLine = m.description ? m.description : 'Submit by ' + dateStr;
-  setText('stat-milestone-sub', descLine + (daysLine ? daysLine : (dateStr && !m.description ? '' : ' · ' + dateStr)));
+  setText('stat-milestone-sub', (m.description || '') + daysLine);
 }
 
 // Toggle the dash season card's drafts accordion.

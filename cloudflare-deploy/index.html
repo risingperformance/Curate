@@ -1936,9 +1936,10 @@
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
     font-size: 11px; color: #6b7280;
+    line-height: 1;
   }
-  .dash-stat-value { font-size: 32px; font-weight: 700; color: #0a1834; margin-top: 4px; line-height: 1; }
-  .dash-stat-sub { font-size: 12px; color: #6b7280; margin-top: 8px; }
+  .dash-stat-value { font-size: 32px; font-weight: 700; color: #0a1834; margin-top: 6px; line-height: 1; }
+  .dash-stat-sub { font-size: 12px; color: #6b7280; margin-top: 8px; line-height: 1.2; }
   .dash-stat-icon {
     position: absolute; top: 18px; right: 18px;
     width: 32px; height: 32px; border-radius: 8px;
@@ -1953,6 +1954,17 @@
   .dash-stat-milestone .dash-stat-value { color: #fff; font-family: 'Playfair Display', serif; font-size: 20px; line-height: 1.2; margin-top: 6px; }
   .dash-stat-milestone .dash-stat-sub { color: rgba(255,255,255,0.7); }
   .dash-stat-milestone .dash-stat-icon { background: rgba(200,168,75,0.2); color: #c8a84b; }
+  .dash-stat-label-date {
+    margin-left: 8px;
+    padding: 2px 8px 0 8px;
+    border-radius: 999px;
+    background: rgba(200,168,75,0.18);
+    color: #c8a84b;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    line-height: 1;
+  }
+  .dash-stat-label-date:empty { display: none; }
 
   /* ── Main grid ──────────────────────────────────────────────────── */
   .dash-grid {
@@ -1977,29 +1989,35 @@
   .dash-scard-img { background-size: cover; background-position: center; min-height: 180px; }
   .dash-scard-body { padding: 22px 24px 22px 0; display: flex; flex-direction: column; }
   .dash-scard-tag {
-    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; height: 22px; padding: 0 10px;
+    border-radius: 999px;
+    font-family: 'Barlow Condensed', sans-serif;
     font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
     background: #dcfce7; color: #16a34a;
     align-self: flex-start;
+    line-height: 1;
   }
   .dash-scard-tag-closed { background: #fee2e2; color: #b91c1c; }
   .dash-scard-title { font-family: 'Playfair Display', serif; font-size: 24px; color: #0a1834; margin-top: 8px; line-height: 1.15; }
   .dash-scard-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 16px; flex-wrap: wrap; }
   .dash-scard-btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 16px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 16px; border-radius: 6px;
     font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
     letter-spacing: 0.06em; text-transform: uppercase; font-size: 12px;
+    line-height: 1;
     cursor: pointer; border: 1px solid transparent;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
+  .dash-scard-btn svg { display: block; }
   .dash-scard-btn-primary { background: #0a1834; color: #fff; }
   .dash-scard-btn-primary:hover { background: #c8a84b; color: #0a1834; }
   .dash-scard-btn-secondary { background: #fff; color: #0a1834; border-color: #e5e7eb; }
   .dash-scard-btn-secondary:hover { border-color: #0a1834; }
   .dash-scard-btn .count {
+    display: inline-flex; align-items: center; justify-content: center;
     background: #faf5e8; color: #0a1834;
-    padding: 2px 8px; border-radius: 999px; font-size: 11px;
+    height: 18px; padding: 0 8px; border-radius: 999px; font-size: 11px; line-height: 1;
   }
   .dash-scard-btn-secondary svg { transition: transform 0.2s ease; }
   .dash-scard.open .dash-scard-btn-secondary svg { transform: rotate(180deg); }
@@ -2268,13 +2286,42 @@
   .exit-actions button,
   .draft-delete-actions button,
   .qty-popup-actions button,
-  .btn-fs {
+  .btn-fs,
+  .dash-scard-btn,
+  .dash-scard-btn .count,
+  .dash-scard-tag,
+  .dash-toggle button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     line-height: 1 !important;
   }
   .btn { gap: 7px !important; }
+  .dash-scard-btn { gap: 8px !important; }
+
+  .dash-stat-label { line-height: 1 !important; }
+  .dash-stat-value { line-height: 1 !important; }
+  .dash-stat-sub { line-height: 1.2 !important; }
+  .dash-stat-milestone .dash-stat-value { line-height: 1.2 !important; }
+
+  /* Stat-card icon: SVG was sitting on its baseline. Force it to a
+     centred block so the glyph sits dead-centre in the rounded square. */
+  .dash-stat-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+  }
+  .dash-stat-icon svg { display: block; }
+
+  /* Side-panel headers (Top 10 Products / Next 5 Appointments). */
+  .dash-panel-head { align-items: center !important; }
+  .dash-panel-title,
+  .dash-panel-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    line-height: 1 !important;
+  }
 
   .tab-btn {
     display: inline-flex !important;
@@ -2455,6 +2502,14 @@
   .header-title h1 { padding-top: 2px !important; }
   .fj-logo-text { padding-top: 2px !important; }
 
+  /* Dashboard surface (home screen) — same cap-height correction. */
+  .dash-scard-btn { padding: 2px 16px 0 16px !important; }
+  .dash-scard-btn .count { padding: 1px 8px 0 8px !important; }
+  .dash-scard-tag { padding: 2px 10px 0 10px !important; }
+  .dash-stat-label { padding-top: 2px !important; }
+  .dash-toggle button { padding: 8px 14px 4px 14px !important; }
+  .dash-panel-link { padding-top: 2px !important; }
+
   /* ── FORM CONTROLS ── */
 
   .field-group input,
@@ -2600,7 +2655,7 @@
         </div>
       </div>
       <div class="dash-stat dash-stat-milestone">
-        <div class="dash-stat-label">Next milestone</div>
+        <div class="dash-stat-label">Next milestone<span class="dash-stat-label-date" id="stat-milestone-date"></span></div>
         <div class="dash-stat-value" id="stat-milestone">Coming soon</div>
         <div class="dash-stat-sub" id="stat-milestone-sub">Set a milestone in the admin to highlight an upcoming deadline.</div>
         <div class="dash-stat-icon">
