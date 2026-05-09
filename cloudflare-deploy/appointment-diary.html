@@ -280,6 +280,28 @@ html, body { height: 100%; font-family: 'Space Grotesk', sans-serif; background:
 }
 .cal-body { display: grid; grid-template-columns: repeat(7, 1fr); }
 
+/* 5-day work-week display: collapse to Mon-Fri only. */
+body.cal-5day .cal-dow-row,
+body.cal-5day .cal-body {
+  grid-template-columns: repeat(5, 1fr);
+}
+body.cal-5day .cal-dow-cell.dow-sat,
+body.cal-5day .cal-dow-cell.dow-sun { display: none; }
+
+/* Hamburger menu section label (used for Calendar view group). */
+.fj-menu-section {
+  padding: 10px 16px 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #6b7280;
+}
+.fj-menu-item .fj-menu-icon-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  font-size: 14px; line-height: 1;
+  color: #6b7280;
+}
+.fj-menu-item.active .fj-menu-icon-dot { color: var(--gold-dk); }
+
 .cal-day {
   min-height: 82px; border-right: 1px solid var(--border-lt);
   border-bottom: 1px solid var(--border-lt);
@@ -1120,6 +1142,16 @@ textarea { resize: vertical; min-height: 68px; }
           <span class="fj-menu-icon">&larr;</span><span>Back to Home</span>
         </button>
         <div class="fj-menu-sep"></div>
+        <div class="fj-menu-section">Calendar view</div>
+        <button class="fj-menu-item" id="fj-week-5-btn" role="menuitemradio" type="button">
+          <span class="fj-menu-icon fj-menu-icon-dot" id="fj-week-5-dot">&#9679;</span>
+          <span>5-day week (Mon-Fri)</span>
+        </button>
+        <button class="fj-menu-item" id="fj-week-7-btn" role="menuitemradio" type="button">
+          <span class="fj-menu-icon fj-menu-icon-dot" id="fj-week-7-dot">&#9675;</span>
+          <span>7-day week (Mon-Sun)</span>
+        </button>
+        <div class="fj-menu-sep"></div>
         <button class="fj-menu-item" id="fj-sign-out-btn" role="menuitem" type="button">
           <span class="fj-menu-icon">&#9099;</span><span>Sign out</span>
         </button>
@@ -1183,13 +1215,13 @@ textarea { resize: vertical; min-height: 68px; }
               </div>
             </div>
             <div class="cal-dow-row">
-              <div class="cal-dow-cell">Mon</div>
-              <div class="cal-dow-cell">Tue</div>
-              <div class="cal-dow-cell">Wed</div>
-              <div class="cal-dow-cell">Thu</div>
-              <div class="cal-dow-cell">Fri</div>
-              <div class="cal-dow-cell">Sat</div>
-              <div class="cal-dow-cell">Sun</div>
+              <div class="cal-dow-cell dow-mon">Mon</div>
+              <div class="cal-dow-cell dow-tue">Tue</div>
+              <div class="cal-dow-cell dow-wed">Wed</div>
+              <div class="cal-dow-cell dow-thu">Thu</div>
+              <div class="cal-dow-cell dow-fri">Fri</div>
+              <div class="cal-dow-cell dow-sat">Sat</div>
+              <div class="cal-dow-cell dow-sun">Sun</div>
             </div>
             <div class="cal-body" id="cal-body"></div>
           </div>

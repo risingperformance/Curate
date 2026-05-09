@@ -27,6 +27,14 @@ let invitePreSlot  = null;
 let quickSelCust   = null;
 let quickMatches   = [];
 let selectedTplId  = null;
+// Calendar week display mode: 5 (Mon-Fri) or 7 (Mon-Sun). Persisted in
+// localStorage so the choice survives reload. Default = 5 days.
+let weekMode = (function () {
+  try {
+    const v = parseInt(localStorage.getItem('fj-diary-week-mode') || '5', 10);
+    return (v === 5 || v === 7) ? v : 5;
+  } catch (_) { return 5; }
+})();
 
 // ═══════════════════════════════════════════════
 // BACK TO PREBOOK — Supabase Auth session is shared via
@@ -352,45 +360,54 @@ function renderCal() {
   document.getElementById('cal-card-sub').textContent =
     `${bookedThisMonth} confirmed booking${bookedThisMonth !== 1 ? 's' : ''} this month - click a date to view details`;
 
-  const firstDOW = new Date(y, m, 1).getDay();
-  const leadDays = (firstDOW + 6) % 7; // Mon-based
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const prevDays    = new Date(y, m, 0).getDate();
-
   const body = document.getElementById('cal-body');
   body.innerHTML = '';
 
   const toKey = (yr, mo, dy) =>
     `${yr}-${String(mo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
 
-  // Leading cells (prev month)
-  for (let i = leadDays - 1; i >= 0; i--) {
-    const cell = document.createElement('div');
-    cell.className = 'cal-day other-month';
-    cell.innerHTML = `<div class="day-num">${prevDays - i}</div>`;
-    body.appendChild(cell);
-  }
+  // Walk the grid week-by-week from the Monday of the first week shown
+  // through the Sunday of the last week shown. In 5-day mode, Sat/Sun
+  // are skipped entirely; in 7-day mode every day is rendered.
+  const firstOfMonth = new Date(y, m, 1);
+  const lastOfMonth  = new Date(y, m + 1, 0);
+  const startMonday  = new Date(firstOfMonth);
+  startMonday.setDate(startMonday.getDate() - ((startMonday.getDay() + 6) % 7));
+  const endSunday    = new Date(lastOfMonth);
+  endSunday.setDate(endSunday.getDate() + ((7 - endSunday.getDay()) % 7));
 
-  // This month
-  for (let d = 1; d <= daysInMonth; d++) {
-    const key    = toKey(y, m, d);
-    const isTd   = today.getFullYear()===y && today.getMonth()===m && today.getDate()===d;
-    const isSel  = calSelDate === key;
-    const daySlots = slots.filter(s => s.date === key && s.status !== 'cancelled');
+  for (let cur = new Date(startMonday); cur <= endSunday; cur.setDate(cur.getDate() + 1)) {
+    const dow = cur.getDay(); // 0=Sun .. 6=Sat
+    if (weekMode === 5 && (dow === 0 || dow === 6)) continue;
+
+    const cy = cur.getFullYear();
+    const cm = cur.getMonth();
+    const cdy = cur.getDate();
+    const inMonth = (cy === y && cm === m);
+    const key = toKey(cy, cm, cdy);
 
     const cell = document.createElement('div');
-    cell.className = 'cal-day' +
-      (isTd  ? ' today'    : '') +
-      (isSel ? ' selected' : '');
+    cell.className = 'cal-day';
+
+    if (!inMonth) {
+      cell.classList.add('other-month');
+      cell.innerHTML = `<div class="day-num">${cdy}</div>`;
+      body.appendChild(cell);
+      continue;
+    }
+
+    const isTd  = today.getFullYear()===y && today.getMonth()===m && today.getDate()===cdy;
+    const isSel = calSelDate === key;
+    if (isTd)  cell.classList.add('today');
+    if (isSel) cell.classList.add('selected');
     cell.onclick = () => selectDay(key);
 
-    // Day number
     const num = document.createElement('div');
     num.className = 'day-num';
-    num.textContent = d;
+    num.textContent = cdy;
     cell.appendChild(num);
 
-    // Chips
+    const daySlots = slots.filter(s => s.date === key && s.status !== 'cancelled');
     if (daySlots.length > 0) {
       const chipsDiv = document.createElement('div');
       chipsDiv.className = 'day-chips';
@@ -421,7 +438,6 @@ function renderCal() {
           chip.appendChild(locEl);
         }
 
-        // Hover popup with full details
         chip.addEventListener('mouseenter', e => showChipPopup(e.currentTarget, s, bk));
         chip.addEventListener('mouseleave', hideChipPopup);
 
@@ -439,15 +455,7 @@ function renderCal() {
     body.appendChild(cell);
   }
 
-  // Trailing cells
-  const total    = leadDays + daysInMonth;
-  const trailing = (7 - (total % 7)) % 7;
-  for (let d = 1; d <= trailing; d++) {
-    const cell = document.createElement('div');
-    cell.className = 'cal-day other-month';
-    cell.innerHTML = `<div class="day-num">${d}</div>`;
-    body.appendChild(cell);
-  }
+  // (Trailing cells handled by the loop above so it can skip Sat/Sun in 5-day mode.)
 }
 
 // Hours to render in the day timeline (8 AM through 5 PM).
@@ -1375,6 +1383,43 @@ const fjSignOut = document.getElementById('fj-sign-out-btn');
 if (fjSignOut) fjSignOut.addEventListener('click', async () => {
   await sb.auth.signOut();
   window.location.reload();
+});
+
+// Calendar week-mode (5 or 7 day) toggle in the hamburger menu.
+function applyWeekMode(mode) {
+  weekMode = (mode === 7) ? 7 : 5;
+  document.body.classList.toggle('cal-5day', weekMode === 5);
+  try { localStorage.setItem('fj-diary-week-mode', String(weekMode)); } catch (_) {}
+  const dot5 = document.getElementById('fj-week-5-dot');
+  const dot7 = document.getElementById('fj-week-7-dot');
+  if (dot5) dot5.innerHTML = (weekMode === 5) ? '&#9679;' : '&#9675;';
+  if (dot7) dot7.innerHTML = (weekMode === 7) ? '&#9679;' : '&#9675;';
+  const btn5 = document.getElementById('fj-week-5-btn');
+  const btn7 = document.getElementById('fj-week-7-btn');
+  if (btn5) btn5.classList.toggle('active', weekMode === 5);
+  if (btn7) btn7.classList.toggle('active', weekMode === 7);
+  if (typeof renderCal === 'function') renderCal();
+}
+// Apply the persisted preference immediately so the body class is set
+// before the calendar first renders.
+applyWeekMode(weekMode);
+
+const fjWeek5 = document.getElementById('fj-week-5-btn');
+const fjWeek7 = document.getElementById('fj-week-7-btn');
+if (fjWeek5) fjWeek5.addEventListener('click', () => {
+  applyWeekMode(5);
+  // Close the menu after switching
+  const m = document.getElementById('fj-menu');
+  const b = document.getElementById('fj-menu-btn');
+  if (m) m.setAttribute('hidden', '');
+  if (b) b.setAttribute('aria-expanded', 'false');
+});
+if (fjWeek7) fjWeek7.addEventListener('click', () => {
+  applyWeekMode(7);
+  const m = document.getElementById('fj-menu');
+  const b = document.getElementById('fj-menu-btn');
+  if (m) m.setAttribute('hidden', '');
+  if (b) b.setAttribute('aria-expanded', 'false');
 });
 
 // Hamburger menu open/close
