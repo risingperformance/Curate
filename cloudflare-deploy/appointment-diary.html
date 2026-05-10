@@ -9,12 +9,13 @@
   style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src    https://fonts.gstatic.com;
   img-src     'self' https://mlwzpgtdgfaczgxipbsq.supabase.co data:;
-  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co;
+  connect-src 'self' https://mlwzpgtdgfaczgxipbsq.supabase.co https://cdn.jsdelivr.net;
   object-src  'none';
   base-uri    'self';
   form-action 'self';
+  frame-ancestors 'none';
 ">
-<meta http-equiv="X-Frame-Options" content="DENY">
+<!-- X-Frame-Options removed: must be set via HTTP header to take effect; frame-ancestors above does the same job inside CSP -->
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>FJ Curate &mdash; Appointment Diary</title>

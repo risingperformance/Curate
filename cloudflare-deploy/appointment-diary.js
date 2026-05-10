@@ -814,6 +814,27 @@ function replacePlaceholders(text, vars) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || '');
 }
 
+// Build the full set of placeholder vars used in invitation emails so the
+// manually-entered first/last name on the form always wins, regardless of
+// which placeholder a template happens to use.
+function buildInviteVars(firstName, lastName, fullName, amName) {
+  const f = firstName || '';
+  const l = lastName  || '';
+  const full = fullName || [f, l].filter(Boolean).join(' ');
+  return {
+    customer_name:        full,
+    customer_full_name:   full,
+    customer_first:       f,
+    customer_first_name:  f,
+    customer_last:        l,
+    customer_last_name:   l,
+    first_name:           f,
+    last_name:            l,
+    am_name:              amName || '',
+    rep_name:             amName || '',
+  };
+}
+
 // ═══════════════════════════════════════════════
 // SEND INVITATION
 // ═══════════════════════════════════════════════
@@ -964,7 +985,7 @@ function renderInvitePreview() {
   const toEl      = document.getElementById('inv-preview-to');
   if (subjectEl) {
     subjectEl.textContent = tpl
-      ? replacePlaceholders(tpl.email_subject || '', { customer_name: custName, am_name: me?.name || '' })
+      ? replacePlaceholders(tpl.email_subject || '', buildInviteVars(fname, lname, custName, me?.name || ''))
       : '(pick a template)';
   }
   if (toEl) toEl.textContent = email;
@@ -977,7 +998,7 @@ function renderInvitePreview() {
     slotRows = `<tr><td colspan="3" style="padding:14px;color:#999;text-align:center;font-style:italic">No slots selected yet</td></tr>`;
   }
 
-  const html = inviteEmailHTML(custName, me?.name || '', slotRows, '#preview', tpl);
+  const html = inviteEmailHTML(custName, me?.name || '', slotRows, '#preview', tpl, fname, lname);
   iframe.srcdoc = html;
 }
 
@@ -1072,8 +1093,8 @@ async function sendInvite() {
     return `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${dl}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${fmt(s.start_time)}&ndash;${fmt(s.end_time)}</td><td style="padding:8px 12px;border-bottom:1px solid #eee">${escHtml(s.location||'')}</td></tr>`;
   }).join('');
 
-  const html = inviteEmailHTML(custName, me.name, slotRows, bookUrl, tpl);
-  const emailSubject = replacePlaceholders(tpl.email_subject, { customer_name: custName, am_name: me.name });
+  const html = inviteEmailHTML(custName, me.name, slotRows, bookUrl, tpl, firstName, lastName);
+  const emailSubject = replacePlaceholders(tpl.email_subject, buildInviteVars(firstName, lastName, custName, me.name));
 
   try {
     // Use authenticated session token (not anon key)
@@ -1183,12 +1204,19 @@ function gcalLink(b) {
 // ═══════════════════════════════════════════════
 // EMAIL HTML
 // ═══════════════════════════════════════════════
-function inviteEmailHTML(custName, amName, slotRows, bookUrl, tpl) {
-  // Substitute placeholders in intro text (escape names to prevent HTML injection in emails)
-  const intro = replacePlaceholders(tpl?.intro_text || '<p>Hi {{customer_name}},</p><p><strong>{{am_name}}</strong> from FJ Curate would like to meet with you. Please choose a time below.</p>', {
-    customer_name: escHtml(custName),
-    am_name: escHtml(amName)
-  });
+function inviteEmailHTML(custName, amName, slotRows, bookUrl, tpl, firstName, lastName) {
+  // Substitute placeholders in intro text (escape names to prevent HTML
+  // injection in emails). Uses the manually-entered first/last name where
+  // available so any placeholder variant the template uses
+  // (customer_name / first_name / last_name / customer_first / etc.) gets
+  // the rep's typed value, not the customer record default.
+  const rawVars = buildInviteVars(firstName, lastName, custName, amName);
+  const escVars = {};
+  for (const k in rawVars) escVars[k] = escHtml(rawVars[k]);
+  const intro = replacePlaceholders(
+    tpl?.intro_text || '<p>Hi {{customer_name}},</p><p><strong>{{am_name}}</strong> from FJ Curate would like to meet with you. Please choose a time below.</p>',
+    escVars
+  );
   const heading = escHtml(tpl?.heading || 'Prebook Appointment Invitation');
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
