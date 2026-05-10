@@ -352,7 +352,13 @@ body.cal-5day .cal-dow-cell.dow-sun { display: none; }
   max-height: 100%;
   padding-right: 4px;
 }
+/* Drop the right border on the last cell of each row. The "last" column
+   index depends on whether we're rendering 5 or 7 days per week, so the
+   rule is split: re-add the border on the 7th-column cells when the body
+   is in 5-day mode, and remove it from the 5th-column cells instead. */
 .cal-day:nth-child(7n) { border-right: none; }
+body.cal-5day .cal-day:nth-child(7n) { border-right: 1px solid var(--border-lt); }
+body.cal-5day .cal-day:nth-child(5n) { border-right: none; }
 .cal-day:hover:not(.other-month) { background: rgba(0,0,0,0.02); }
 .cal-day.other-month { background: #fafafa; cursor: default; }
 .cal-day.today       { background: rgba(232,184,75,0.07); }
@@ -366,26 +372,51 @@ body.cal-5day .cal-dow-cell.dow-sun { display: none; }
 .cal-day.other-month .day-num { color: #c8c8c8; }
 .cal-day.today .day-num { background: var(--black); color: var(--white); }
 
-.day-chips { display: flex; flex-direction: column; gap: 3px; }
+/* Hybrid chip layout: first 2 slots render as full-width single-line bars
+   with time + name; slots 3+ render below as tiny coloured time-pills.
+   Lets a busy day show 5+ slots without overflowing the cell. */
+.day-chips { display: flex; flex-direction: column; gap: 2px; }
 .day-chip {
-  font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 3px;
-  line-height: 1.3; cursor: default;
-  display: flex; flex-direction: column; gap: 1px;
-  overflow: hidden;
-}
-.day-chip.booked { background: rgba(44,181,160,0.14); color: #1e8c7a; }
-.day-chip.avail  { background: rgba(232,184,75,0.20); color: #9a7620; }
-.day-chip-time {
-  font-size: 9px; font-weight: 700; opacity: 0.9; letter-spacing: 0.02em;
-}
-.day-chip-text {
-  font-size: 9.5px; font-weight: 700;
+  padding: 2px 6px;
+  border-left: 3px solid transparent;
+  font-size: 10px; line-height: 1.3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: default;
 }
-.day-chip-loc {
-  font-size: 8.5px; font-weight: 500; opacity: 0.75;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.day-chip.booked {
+  border-left-color: var(--teal);
+  background: rgba(44,181,160,0.14);
+  color: #1e8c7a;
 }
+.day-chip.avail {
+  border-left-color: var(--gold-dk);
+  background: rgba(232,184,75,0.20);
+  color: #9a7620;
+}
+.day-chip .t {
+  font-family: 'Space Mono', monospace; font-weight: 700;
+  margin-right: 4px;
+}
+.day-chip .n { font-weight: 600; }
+
+/* Micro time-pill row (slots 3+ in the Hybrid layout). */
+.day-micro-row {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  margin-top: 2px;
+}
+.day-micro-pill {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 700;
+  padding: 1px 5px; border-radius: 3px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: default;
+}
+.day-micro-pill.booked { background: var(--teal); color: #fff; }
+.day-micro-pill.avail  { background: var(--gold); color: var(--black); }
+.day-micro-pill:hover { filter: brightness(0.92); }
+
+/* Legacy "+N more" footer kept (unused in Hybrid layout but harmless). */
 .day-more { font-size: 9px; font-weight: 700; color: var(--grey); padding-left: 1px; margin-top: 1px; }
 
 /* ── HOVER POPUP for calendar day chips ── */
@@ -1082,6 +1113,9 @@ textarea { resize: vertical; min-height: 68px; }
 /* Subject is now shown in the preview-pane toolbar; keep the legacy
    in-form subject preview hidden even though older JS still writes to it. */
 #m-invite #tpl-subject-preview { display: none !important; }
+/* Booking link is shown live in the email preview pane on the right;
+   hide the legacy text-only "link will be generated" debug strip. */
+#m-invite #link-preview-wrap { display: none !important; }
 
 </style>
 </head>

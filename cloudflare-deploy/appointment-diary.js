@@ -365,6 +365,7 @@ function renderCal() {
 
   const toKey = (yr, mo, dy) =>
     `${yr}-${String(mo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+  const todayKey = new Date().toISOString().slice(0, 10);
 
   // Walk the grid week-by-week from the Monday of the first week shown
   // through the Sunday of the last week shown. In 5-day mode, Sat/Sun
@@ -407,48 +408,67 @@ function renderCal() {
     num.textContent = cdy;
     cell.appendChild(num);
 
-    const daySlots = slots.filter(s => s.date === key && s.status !== 'cancelled');
+    // Hide past Available slots — they're stale and clutter the grid.
+    // Past confirmed bookings still render (history of meetings that happened).
+    const daySlots = slots.filter(s =>
+      s.date === key &&
+      s.status !== 'cancelled' &&
+      !(key < todayKey && s.status === 'available')
+    );
     if (daySlots.length > 0) {
+      // Sort chronologically so the first 2 (full bars) are the earliest of the day.
+      daySlots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+
       const chipsDiv = document.createElement('div');
       chipsDiv.className = 'day-chips';
-      daySlots.slice(0, 2).forEach(s => {
-        const chip = document.createElement('div');
-        chip.className = `day-chip ${s.status}`;
 
+      // First 2 slots → full-width single-line status bars (time + name).
+      const FULL_BAR_COUNT = 2;
+      const fullBars = daySlots.slice(0, FULL_BAR_COUNT);
+      const overflow = daySlots.slice(FULL_BAR_COUNT);
+
+      fullBars.forEach(s => {
         const bk = (s.status === 'booked')
           ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
           : null;
+        const cls = (s.status === 'booked') ? 'booked' : 'avail';
+        const name = bk ? bookingAccountLabel(bk)
+                        : (s.status === 'booked' ? 'Booked' : 'Available');
 
-        const timeEl = document.createElement('div');
-        timeEl.className = 'day-chip-time';
-        timeEl.textContent = fmt(s.start_time);
-        chip.appendChild(timeEl);
-
-        const mainEl = document.createElement('div');
-        mainEl.className = 'day-chip-text';
-        mainEl.textContent = bk
-          ? (bk.customer_name || 'Booked')
-          : (s.status === 'booked' ? 'Booked' : 'Available');
-        chip.appendChild(mainEl);
-
-        if (s.location) {
-          const locEl = document.createElement('div');
-          locEl.className = 'day-chip-loc';
-          locEl.textContent = s.location;
-          chip.appendChild(locEl);
-        }
+        const chip = document.createElement('div');
+        chip.className = `day-chip ${cls}`;
+        const t = document.createElement('span');
+        t.className = 't'; t.textContent = fmt(s.start_time);
+        const n = document.createElement('span');
+        n.className = 'n'; n.textContent = name;
+        chip.appendChild(t);
+        chip.appendChild(n);
 
         chip.addEventListener('mouseenter', e => showChipPopup(e.currentTarget, s, bk));
         chip.addEventListener('mouseleave', hideChipPopup);
 
         chipsDiv.appendChild(chip);
       });
-      if (daySlots.length > 2) {
-        const more = document.createElement('div');
-        more.className = 'day-more';
-        more.textContent = `+${daySlots.length - 2} more`;
-        chipsDiv.appendChild(more);
+
+      // Slots 3+ → micro time-pills, color-coded by status, no name.
+      if (overflow.length > 0) {
+        const microRow = document.createElement('div');
+        microRow.className = 'day-micro-row';
+        overflow.forEach(s => {
+          const bk = (s.status === 'booked')
+            ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
+            : null;
+          const cls = (s.status === 'booked') ? 'booked' : 'avail';
+          const pill = document.createElement('span');
+          pill.className = `day-micro-pill ${cls}`;
+          pill.textContent = fmt(s.start_time);
+          pill.addEventListener('mouseenter', e => showChipPopup(e.currentTarget, s, bk));
+          pill.addEventListener('mouseleave', hideChipPopup);
+          microRow.appendChild(pill);
+        });
+        chipsDiv.appendChild(microRow);
       }
+
       cell.appendChild(chipsDiv);
     }
 
@@ -467,6 +487,19 @@ function timelineHourLabel(h) {
 }
 function statusClass(status) {
   return status === 'booked' ? 'booked' : 'avail';
+}
+
+// Resolve the account label for a confirmed booking.
+// Prefers the customer's account_name (looked up via account_code in the
+// loaded customers list) over the contact name stored on the booking row.
+// Falls back to the contact name when no account is linked.
+function bookingAccountLabel(bk) {
+  if (!bk) return '';
+  if (bk.account_code) {
+    const c = customers.find(x => x && x.account_code === bk.account_code);
+    if (c && c.account_name) return c.account_name;
+  }
+  return bk.customer_name || 'Booked';
 }
 function durationMin(start, end) {
   if (!start || !end) return null;
@@ -487,8 +520,15 @@ function selectDay(key) {
   const todayKey  = new Date().toISOString().slice(0, 10);
   const isPast    = key < todayKey;
 
+  // Same filter as the calendar grid: hide past Available slots so the
+  // day pane matches what's shown above. Past confirmed bookings still
+  // appear in the timeline as a record of what took place.
   const daySlots = slots
-    .filter(s => s.date === key && s.status !== 'cancelled')
+    .filter(s =>
+      s.date === key &&
+      s.status !== 'cancelled' &&
+      !(isPast && s.status === 'available')
+    )
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   const confirmed = daySlots.filter(s => s.status === 'booked').length;
@@ -534,13 +574,17 @@ function selectDay(key) {
           ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
           : null;
         const cls   = statusClass(s.status);
-        const title = bk ? escHtml(bk.customer_name)
+        const title = bk ? escHtml(bookingAccountLabel(bk))
                          : (s.location ? escHtml(s.location) : 'Available');
         const dur   = durationMin(s.start_time, s.end_time);
         const isOnHour = /:00$/.test(s.start_time);
         const metaParts = [];
         if (!isOnHour) metaParts.push(fmt(s.start_time));
         if (bk) {
+          // Contact name (different from the account/title), then email + location.
+          if (bk.customer_name && bk.customer_name !== bookingAccountLabel(bk)) {
+            metaParts.push(escHtml(bk.customer_name));
+          }
           if (bk.customer_email) metaParts.push(escHtml(bk.customer_email));
           if (s.location)        metaParts.push(escHtml(s.location));
         } else if (s.location && !isOnHour) {
@@ -864,10 +908,15 @@ function openInvite(slotId) {
     if (quickSelCust.contact_email) document.getElementById('inv-email').value = quickSelCust.contact_email;
   }
 
-  const avail = slots.filter(s => s.status === 'available');
+  // Only offer slots that are available AND in the future. Past Available
+  // slots clutter the picker and can't be honoured by the customer anyway.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const avail = slots
+    .filter(s => s.status === 'available' && s.date >= todayKey)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
   const picker = document.getElementById('slot-picker');
   if (avail.length === 0) {
-    picker.innerHTML = '<div style="padding:14px;color:var(--muted);font-size:12px;text-align:center">No available slots. Create some first.</div>';
+    picker.innerHTML = '<div style="padding:14px;color:var(--muted);font-size:12px;text-align:center;grid-column:1/-1">No upcoming available slots. Create some first.</div>';
   } else {
     picker.innerHTML = avail.map(s => {
       const d  = new Date(s.date + 'T00:00:00');
