@@ -27,6 +27,11 @@ let invitePreSlot  = null;
 let quickSelCust   = null;
 let quickMatches   = [];
 let selectedTplId  = null;
+// Send-invitation modal mode:
+//   'invite' = pick from many available slots, customer chooses one (default)
+//   'book'   = single fixed time, send confirmation directly to one customer
+let inviteMode    = 'invite';
+let bookContext   = null; // { date, start_time, end_time }
 // Calendar week display mode: 5 (Mon-Fri) or 7 (Mon-Sun). Persisted in
 // localStorage so the choice survives reload. Default = 5 days.
 let weekMode = (function () {
@@ -567,7 +572,18 @@ function selectDay(key) {
     if (inHour.length === 0) {
       inner = isPast
         ? '<div class="ddp-row-empty disabled">&mdash;</div>'
-        : `<div class="ddp-row-empty" data-action="openCreateSlotAt" data-date="${key}" data-hour="${hour}">+ Add slot</div>`;
+        : `<div class="ddp-row-empty-split">
+             <div class="ddp-row-empty ddp-row-book"
+                  data-action="bookAppointmentAt" data-date="${key}" data-hour="${hour}"
+                  title="Book a confirmed appointment with one customer at this time">
+               <span class="ddp-row-icon">&#9989;</span> Book Appointment
+             </div>
+             <div class="ddp-row-empty ddp-row-add"
+                  data-action="openCreateSlotAt" data-date="${key}" data-hour="${hour}"
+                  title="Create an open slot to invite multiple customers to choose">
+               + Add slot
+             </div>
+           </div>`;
     } else {
       inner = inHour.map(s => {
         const bk = s.status === 'booked'
@@ -890,6 +906,9 @@ function buildInviteVars(firstName, lastName, fullName, amName) {
 // SEND INVITATION
 // ═══════════════════════════════════════════════
 function openInvite(slotId) {
+  inviteMode    = 'invite';
+  bookContext   = null;
+  setInviteModalChrome();
   invitePreSlot = slotId;
   inviteSelCust = null;
   custMatches   = [];
@@ -945,6 +964,94 @@ function openInvite(slotId) {
 
 function openInviteFromQuick() {
   openInvite(null);
+}
+
+// Configure the invite modal's chrome (title/sub/section3/button) to match
+// the current `inviteMode`. Called when each mode opens or switches.
+function setInviteModalChrome() {
+  const titleEl = document.getElementById('m-invite-title');
+  const subEl   = document.getElementById('m-invite-sub');
+  const s3Title = document.getElementById('inv-section3-title');
+  const s3Help  = document.getElementById('inv-section3-help');
+  const sendBtn = document.getElementById('m-invite-send');
+  const slotPick = document.getElementById('slot-picker');
+  const bookPan  = document.getElementById('book-time-panel');
+
+  if (inviteMode === 'book') {
+    if (titleEl) titleEl.textContent = 'Book Appointment';
+    if (subEl)   subEl.textContent   = 'Send a confirmed appointment time to a single customer.';
+    if (s3Title) s3Title.textContent = 'Appointment Time';
+    if (s3Help)  s3Help.textContent  = 'The customer will receive a confirmation for this time.';
+    if (sendBtn) sendBtn.textContent = 'Send Confirmation';
+    if (slotPick) slotPick.style.display = 'none';
+    if (bookPan)  bookPan.hidden = false;
+  } else {
+    if (titleEl) titleEl.textContent = 'Send Booking Invitation';
+    if (subEl)   subEl.textContent   = 'Configure on the left. The preview on the right updates as you go.';
+    if (s3Title) s3Title.textContent = 'Appointment Slots to Offer';
+    if (s3Help)  s3Help.textContent  = 'The customer will choose from these available slots.';
+    if (sendBtn) sendBtn.textContent = 'Send Invitation Email';
+    if (slotPick) slotPick.style.display = '';
+    if (bookPan)  bookPan.hidden = true;
+  }
+}
+
+// Open the modal in 'book' mode for a specific date + hour. The rep picks
+// a template + customer, optionally sets a location, then sending fires
+// off a confirmed-booking email (no slot picker; the time is fixed).
+function openBookAppointment(date, hour) {
+  const h = parseInt(hour, 10);
+  if (Number.isNaN(h)) return;
+  const pad = (n) => String(n).padStart(2, '0');
+  const start = `${pad(h)}:00`;
+  const end   = `${pad(Math.min(h + 1, 23))}:00`;
+
+  inviteMode    = 'book';
+  bookContext   = { date, start_time: start, end_time: end };
+  invitePreSlot = null;
+  inviteSelCust = null;
+  custMatches   = [];
+
+  // Clear customer fields (same reset as openInvite).
+  document.getElementById('cust-q').value               = '';
+  document.getElementById('cust-results').style.display = 'none';
+  document.getElementById('cust-sel-display').style.display = 'none';
+  document.getElementById('inv-first').value            = '';
+  document.getElementById('inv-last').value             = '';
+  document.getElementById('inv-email').value            = '';
+  const locEl = document.getElementById('book-location');
+  if (locEl) locEl.value = '';
+  const linkWrap = document.getElementById('link-preview-wrap');
+  if (linkWrap) linkWrap.style.display = 'none';
+
+  // Pre-fill from quick search if available (mirrors openInvite).
+  if (quickSelCust) {
+    inviteSelCust = quickSelCust;
+    document.getElementById('cust-q').value = quickSelCust.account_name;
+    const full = [quickSelCust.contact_first, quickSelCust.contact_last].filter(Boolean).join(' ');
+    const disp = document.getElementById('cust-sel-display');
+    disp.innerHTML = `<strong>${escHtml(quickSelCust.account_name)}</strong> (${escHtml(quickSelCust.account_code)})${full ? ' &middot; ' + escHtml(full) : ''}`;
+    disp.style.display = 'block';
+    document.getElementById('inv-first').value = quickSelCust.contact_first || '';
+    document.getElementById('inv-last').value  = quickSelCust.contact_last  || '';
+    if (quickSelCust.contact_email) document.getElementById('inv-email').value = quickSelCust.contact_email;
+  }
+
+  // Fill the fixed time card.
+  const d  = new Date(date + 'T00:00:00');
+  const dl = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const len = durationLabel(start, end);
+  const dEl = document.getElementById('book-time-date');
+  const tEl = document.getElementById('book-time-range');
+  const lEl = document.getElementById('book-time-length');
+  if (dEl) dEl.textContent = dl;
+  if (tEl) tEl.textContent = `${fmt(start)} - ${fmt(end)}`;
+  if (lEl) lEl.textContent = len;
+
+  setInviteModalChrome();
+  renderTemplatePicker();
+  renderInvitePreview();
+  openM('m-invite');
 }
 
 function custSearch(q) {
@@ -1036,26 +1143,69 @@ function renderInvitePreview() {
   const email = (document.getElementById('inv-email')?.value || '').trim()
     || (inviteSelCust?.contact_email || 'customer@example.com');
 
-  // Subject + to line
   const subjectEl = document.getElementById('inv-preview-subject');
   const toEl      = document.getElementById('inv-preview-to');
+  if (toEl) toEl.textContent = email;
+
+  // ── Book mode: render confirmation preview ──────────────────────────
+  if (inviteMode === 'book' && bookContext) {
+    const location = (document.getElementById('book-location')?.value || '').trim();
+    const dateLbl  = new Date(bookContext.date + 'T00:00:00')
+                     .toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (subjectEl) {
+      subjectEl.textContent = `Your FootJoy appointment is confirmed - ${dateLbl}`;
+    }
+    iframe.srcdoc = bookEmailHTML(custName, me?.name || '', dateLbl,
+                                   fmt(bookContext.start_time), fmt(bookContext.end_time),
+                                   location, tpl, fname, lname);
+    return;
+  }
+
+  // ── Invite mode: render the slot-picker invitation preview ──────────
   if (subjectEl) {
     subjectEl.textContent = tpl
       ? replacePlaceholders(tpl.email_subject || '', buildInviteVars(fname, lname, custName, me?.name || ''))
       : '(pick a template)';
   }
-  if (toEl) toEl.textContent = email;
-
-  // Selected slots
   const selIds = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')].map(cb => cb.value);
   const offered = slots.filter(s => selIds.includes(s.id));
   let slotRows = buildInviteSlotRows(offered);
   if (!slotRows) {
     slotRows = `<tr><td colspan="3" style="padding:14px;color:#999;text-align:center;font-style:italic">No slots selected yet</td></tr>`;
   }
+  iframe.srcdoc = inviteEmailHTML(custName, me?.name || '', slotRows, '#preview', tpl, fname, lname);
+}
 
-  const html = inviteEmailHTML(custName, me?.name || '', slotRows, '#preview', tpl, fname, lname);
-  iframe.srcdoc = html;
+// Build the HTML for a confirmed-time email (book-mode send).
+// Uses the picked template's heading for branding; intro and footer are
+// confirmation-specific so the wording is correct regardless of template.
+function bookEmailHTML(custName, amName, dateStr, startT, endT, location, tpl, firstName, lastName) {
+  const heading = escHtml(tpl?.heading || 'Appointment Confirmed');
+  const greet   = escHtml(firstName || custName || 'there');
+  const am      = escHtml(amName);
+  const loc     = location ? escHtml(location) : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,sans-serif">
+<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
+  <div style="background:#0a1628;padding:26px 32px;text-align:center">
+    <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/fj-curate-logo-w.png" alt="FJ Curate" style="height:32px;width:auto;display:block;margin:0 auto 10px">
+    <div style="font-size:18px;font-weight:700;color:#fff">${heading}</div>
+  </div>
+  <div style="padding:32px;font-size:14px;color:#333;line-height:1.7">
+    <p style="margin:0 0 12px">Hi <strong>${greet}</strong>,</p>
+    <p style="margin:0 0 18px">Your appointment with <strong>${am}</strong> from FootJoy is <strong>confirmed</strong> for the time below.</p>
+    <table style="width:100%;border-collapse:collapse;margin:18px 0 24px;font-size:14px;background:#f4f6fb;border-radius:8px;overflow:hidden">
+      <tr><td style="padding:12px 16px;font-weight:600;color:#6b7a99;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dde4f0">Date</td><td style="padding:12px 16px;font-weight:700;border-bottom:1px solid #dde4f0">${escHtml(dateStr)}</td></tr>
+      <tr><td style="padding:12px 16px;font-weight:600;color:#6b7a99;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dde4f0">Time</td><td style="padding:12px 16px;border-bottom:1px solid #dde4f0">${escHtml(startT)} &ndash; ${escHtml(endT)}</td></tr>
+      ${loc ? `<tr><td style="padding:12px 16px;font-weight:600;color:#6b7a99;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #dde4f0">Location</td><td style="padding:12px 16px;border-bottom:1px solid #dde4f0">${loc}</td></tr>` : ''}
+      <tr><td style="padding:12px 16px;font-weight:600;color:#6b7a99;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">With</td><td style="padding:12px 16px;font-weight:700">${am} (FootJoy)</td></tr>
+    </table>
+    <p style="margin:20px 0 0;font-size:12px;color:#777;border-top:1px solid #eee;padding-top:14px">
+      If you need to reschedule, please reply to this email to reach ${am} directly.
+    </p>
+  </div>
+</div>
+</body></html>`;
 }
 
 function previewLink() {
@@ -1075,7 +1225,7 @@ function previewLink() {
 }
 
 async function sendInvite() {
-  console.log('[diary] sendInvite click');
+  console.log('[diary] sendInvite click, mode=' + inviteMode);
   const sendBtn = document.getElementById('m-invite-send');
   const email   = document.getElementById('inv-email').value.trim();
   const selIds  = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')].map(cb => cb.value);
@@ -1100,8 +1250,12 @@ async function sendInvite() {
 
   if (!tpl)           { showError('Please select an email template.'); return; }
   if (!email)         { showError('Please enter a customer email address.'); return; }
-  if (!selIds.length) { showError('Please select at least one appointment slot to offer.'); return; }
   if (!me || !me.name) { showError('Session expired. Please refresh and sign in again.'); return; }
+  if (inviteMode === 'book') {
+    if (!bookContext)        { showError('No appointment time selected. Reopen and try again.'); return; }
+    return await sendBooking({ tpl, custName, firstName, lastName, email, sendBtn, showError, clearError });
+  }
+  if (!selIds.length) { showError('Please select at least one appointment slot to offer.'); return; }
 
   clearError();
   if (sendBtn) {
@@ -1215,6 +1369,129 @@ async function sendInvite() {
       restoreBtn();
     }
   }
+}
+
+// ═══════════════════════════════════════════════
+// SEND BOOKING (book mode of the invite modal)
+// ═══════════════════════════════════════════════
+// Creates a slot at the chosen time, marks it booked, inserts a confirmed
+// appointment_booking, and emails the customer a confirmation. Used by
+// the "Book Appointment" action in the day timeline.
+async function sendBooking({ tpl, custName, firstName, lastName, email, sendBtn, showError, clearError }) {
+  if (!bookContext) { showError('No appointment time selected.'); return; }
+
+  const location = (document.getElementById('book-location')?.value || '').trim();
+
+  clearError();
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.dataset.origText = sendBtn.textContent;
+    sendBtn.textContent = 'Sending...';
+  }
+  const restoreBtn = () => {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      if (sendBtn.dataset.origText) sendBtn.textContent = sendBtn.dataset.origText;
+    }
+  };
+
+  // 1) Insert appointment_slots row marked booked.
+  const { data: slot, error: sErr } = await sb.from('appointment_slots').insert({
+    am_name: me.name, am_email: me.email,
+    date: bookContext.date,
+    start_time: bookContext.start_time,
+    end_time: bookContext.end_time,
+    location: location || null,
+    status: 'booked'
+  }).select().single();
+  if (sErr || !slot) {
+    console.error('[diary] sendBooking slot insert failed', sErr);
+    showError('Could not create the appointment slot: ' + (sErr?.message || 'database error'));
+    restoreBtn();
+    return;
+  }
+
+  // 2) Insert appointment_bookings row (status: confirmed).
+  const { data: bk, error: bErr } = await sb.from('appointment_bookings').insert({
+    slot_id:        slot.id,
+    am_name:        me.name,
+    am_email:       me.email,
+    customer_name:  custName,
+    customer_email: email,
+    account_code:   inviteSelCust?.account_code || null,
+    location:       slot.location,
+    date:           slot.date,
+    start_time:     slot.start_time,
+    end_time:       slot.end_time,
+    status:         'confirmed'
+  }).select().single();
+  if (bErr || !bk) {
+    console.error('[diary] sendBooking booking insert failed', bErr);
+    // Roll the slot back so we don't leave a booked slot with no booking.
+    await sb.from('appointment_slots').update({ status: 'cancelled' }).eq('id', slot.id);
+    showError('Could not record the booking: ' + (bErr?.message || 'database error'));
+    restoreBtn();
+    return;
+  }
+
+  // 3) Refresh local state so the UI shows the new booking immediately.
+  slots.push(slot);
+  bookings.push(bk);
+  slots.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+
+  // 4) Build + send the confirmation email.
+  const dateLbl = new Date(slot.date + 'T00:00:00')
+                  .toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const subject = `Your FootJoy appointment is confirmed - ${dateLbl}`;
+  const html    = bookEmailHTML(custName, me.name, dateLbl,
+                                fmt(slot.start_time), fmt(slot.end_time),
+                                slot.location, tpl, firstName, lastName);
+
+  try {
+    const { data: { session: _emailSess } } = await sb.auth.getSession();
+    const _emailTok = _emailSess?.access_token || SB_KEY;
+    const res = await fetch(EMAIL_EDGE_FN, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + _emailTok
+      },
+      body: JSON.stringify({
+        to:            email,
+        to_name:       custName,
+        subject:       subject,
+        html:          html,
+        from_name:     'FJ Curate',
+        reply_to:      me.email,
+        reply_to_name: me.name
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || res.statusText);
+    }
+    toast('Appointment booked and confirmation sent to ' + email + '.', 'success');
+  } catch (err) {
+    console.error('[diary] sendBooking email failed', err);
+    // Booking is already saved; just warn the rep that the email may
+    // not have gone. Same optimistic-close pattern used by sendInvite.
+    const isFetchFail = !!(err && /failed to fetch/i.test(err.message || ''));
+    if (isFetchFail) {
+      toast('Appointment booked. Confirmation email likely sent to ' + email + '.', 'success');
+    } else {
+      toast('Appointment booked, but the confirmation email failed: ' + (err?.message || 'unknown') + '. You can re-send manually.', 'error');
+    }
+  }
+
+  // 5) Re-render and close the modal.
+  renderCal();
+  renderSlots();
+  renderBookings();
+  renderSidebarMetrics();
+  renderSidebarBookings();
+  if (calSelDate) selectDay(calSelDate);
+  closeM('m-invite');
+  restoreBtn();
 }
 
 // ═══════════════════════════════════════════════
@@ -1457,6 +1734,7 @@ document.addEventListener('click', function(e) {
   else if (action === 'openInvite') openInvite(el.dataset.id);
   else if (action === 'openCreateSlot') openCreateSlot(el.dataset.id);
   else if (action === 'openCreateSlotAt') openCreateSlot(el.dataset.date, el.dataset.hour);
+  else if (action === 'bookAppointmentAt') openBookAppointment(el.dataset.date, el.dataset.hour);
   else if (action === 'doCancel') doCancel(el.dataset.id);
   else if (action === 'cancelBooking') cancelBooking(el.dataset.id);
   else if (action === 'dlICS') dlICS(el.dataset.id);
@@ -1614,8 +1892,9 @@ document.getElementById('cust-q').addEventListener('input', function() {
   custSearch(this.value);
 });
 
-// Live email preview: re-render when the user edits the customer fields.
-['inv-first', 'inv-last', 'inv-email'].forEach(id => {
+// Live email preview: re-render when the user edits the customer fields,
+// or the optional location in book mode.
+['inv-first', 'inv-last', 'inv-email', 'book-location'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', renderInvitePreview);
 });

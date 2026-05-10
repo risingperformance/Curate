@@ -1002,6 +1002,30 @@ textarea { resize: vertical; min-height: 68px; }
   background: transparent;
 }
 
+/* Split empty row: Book Appointment (left) + Add slot (right). */
+.ddp-row-empty-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  flex: 1;
+}
+.ddp-row-empty-split .ddp-row-empty {
+  flex: 1; padding: 12px 10px;
+  font-size: 11px;
+}
+.ddp-row-empty-split .ddp-row-book {
+  border-color: rgba(44,181,160,0.25);
+  color: rgba(255,255,255,0.55);
+}
+.ddp-row-empty-split .ddp-row-book:hover {
+  border-color: rgba(44,181,160,0.65);
+  color: var(--teal);
+  background: rgba(44,181,160,0.08);
+}
+.ddp-row-empty-split .ddp-row-icon {
+  margin-right: 4px;
+}
+
 /* Slot card variant inside the timeline */
 .day-detail-pane .detail-slot.timeline {
   margin-bottom: 0;
@@ -1157,6 +1181,31 @@ textarea { resize: vertical; min-height: 68px; }
 /* Booking link is shown live in the email preview pane on the right;
    hide the legacy text-only "link will be generated" debug strip. */
 #m-invite #link-preview-wrap { display: none !important; }
+
+/* Book mode: fixed-time card shown in section 3 (instead of the slot picker). */
+.book-time-card {
+  background: #fff;
+  border: 1px solid var(--border-lt);
+  border-radius: 7px;
+  padding: 4px 14px;
+}
+.book-time-line {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-lt);
+  font-size: 12px;
+}
+.book-time-line:last-child { border-bottom: 0; }
+.book-time-label {
+  color: var(--muted); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 10px;
+}
+.book-time-value {
+  color: var(--text); font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+}
 
 </style>
 </head>
@@ -1400,8 +1449,8 @@ textarea { resize: vertical; min-height: 68px; }
   <div class="modal modal-invite">
     <div class="modal-hdr">
       <div>
-        <div class="modal-hdr-title">Send Booking Invitation</div>
-        <div class="modal-hdr-sub">Configure on the left. The preview on the right updates as you go.</div>
+        <div class="modal-hdr-title" id="m-invite-title">Send Booking Invitation</div>
+        <div class="modal-hdr-sub" id="m-invite-sub">Configure on the left. The preview on the right updates as you go.</div>
       </div>
       <button class="modal-x" id="m-invite-close">&#x2715;</button>
     </div>
@@ -1445,9 +1494,34 @@ textarea { resize: vertical; min-height: 68px; }
         </div>
 
         <div class="inv-section">
-          <h3><span class="inv-step">3</span>Appointment Slots to Offer</h3>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">The customer will choose from these available slots.</div>
+          <h3><span class="inv-step">3</span><span id="inv-section3-title">Appointment Slots to Offer</span></h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="inv-section3-help">The customer will choose from these available slots.</div>
+
+          <!-- Invite mode: pick from many available slots -->
           <div class="slot-picker slot-picker-grid" id="slot-picker"></div>
+
+          <!-- Book mode: a single fixed time + optional location field -->
+          <div id="book-time-panel" hidden>
+            <div class="book-time-card">
+              <div class="book-time-line">
+                <span class="book-time-label">Date</span>
+                <span class="book-time-value" id="book-time-date">&mdash;</span>
+              </div>
+              <div class="book-time-line">
+                <span class="book-time-label">Time</span>
+                <span class="book-time-value" id="book-time-range">&mdash;</span>
+              </div>
+              <div class="book-time-line">
+                <span class="book-time-label">Length</span>
+                <span class="book-time-value" id="book-time-length">&mdash;</span>
+              </div>
+            </div>
+            <div class="fg" style="margin-top:14px;margin-bottom:0">
+              <label>Location <span style="color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0">(optional)</span></label>
+              <input type="text" id="book-location" placeholder="e.g. Your Golf Shop" autocomplete="off">
+            </div>
+          </div>
+
           <!-- Legacy link preview kept hidden so previewLink() doesn't throw -->
           <div id="link-preview-wrap" style="display:none">
             <div class="link-preview" id="link-preview"></div>
