@@ -16,6 +16,11 @@
   }
 })();
 
+// AUTH12 — currentUser is module-scoped (was on window). Reduces XSS exfil
+// surface and prevents client-side role tampering via DevTools.
+var currentUser = null;
+function getCurrentUser() { return currentUser || {}; }
+
 // ── Read season from URL hash ───────────────────────────────────────────────
 // The root landing page sets #season=<id> when redirecting here. Setting
 // window._selectedSeason early lets loadReferenceData scope its queries
@@ -48,7 +53,7 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
         .select('*').eq('email', session.user.email).single();
       var sp = resp && resp.data;
       if (sp) {
-        window.currentUser = {
+        currentUser = {
           name:    sp.name || '',
           email:   sp.email || session.user.email,
           role:    sp.role || 'rep',
@@ -81,7 +86,7 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
 
 async function signOut() {
   await supa.auth.signOut();
-  window.currentUser = null;
+  currentUser = null;
   window.location.replace('../index.html');
 }
 
@@ -117,7 +122,7 @@ async function renderBookingDiaryCard() {
   const listEl  = document.getElementById('diary-list');
   if (!card || !subEl || !listEl) return;
 
-  const cu = window.currentUser || {};
+  const cu = currentUser || {};
   const isAdminUser = (cu.role === 'admin');
   const myName  = (cu.name  || '').trim();
   const myEmail = (cu.email || '').trim();
@@ -227,7 +232,7 @@ async function showSeasonLanding() {
     .order('created_at', { ascending: false });
 
   // Filter drafts for the current user (admins / dev fallback see everything)
-  const cu = window.currentUser || {};
+  const cu = currentUser || {};
   const isAdminUser = (cu.role === 'admin');
   const myName = (cu.name || '').trim().toLowerCase();
   const visibleDrafts = (drafts || []).filter(d => {
@@ -1124,9 +1129,9 @@ function renderProgramProductCard(pp, rule) {
   const maxLabel = maxQty ? `<span style="font-size:11px;color:var(--fj-mid);margin-left:8px">Max ${maxQty} per style</span>` : '';
 
   return `
-    <div class="product-card program-product-card" data-sku="${orderKey}" data-prog-key="${progKey}" data-prog-product-id="${pp.id}">
+    <div class="product-card program-product-card" data-sku="${escapeAttr(orderKey)}" data-prog-key="${escapeAttr(progKey)}" data-prog-product-id="${escapeAttr(pp.id)}">
       <div class="product-image">
-        <img src="${imgSrc}"
+        <img src="${escapeAttr(imgSrc)}"
              data-img-fallback="product" />
       </div>
       <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
@@ -2575,7 +2580,7 @@ async function buildAndOpenMailto(orderId, account, manager, date, comments) {
           html += `
             <tr style="background:${bg};">
               <td style="padding:5px 10px;border:1px solid #ddd;text-align:center;font-weight:600;">${qty}</td>
-              <td style="padding:5px 10px;border:1px solid #ddd;font-family:monospace;">${as400Code}</td>
+              <td style="padding:5px 10px;border:1px solid #ddd;font-family:monospace;">${escapeHtml(as400Code)}</td>
             </tr>`;
         });
       });
@@ -2636,20 +2641,23 @@ async function buildAndOpenMailto(orderId, account, manager, date, comments) {
 
         const bg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         const c = item.cresting || {};
+        // XSS01 — every customer-controlled or DB-sourced cresting field is
+        // escaped before joining. Pre-escape parts then assemble; the joined
+        // string is safe to interpolate as raw HTML below.
         let crestingText = '—';
         if ((c.addLogo || 'None') === 'Yes') {
           const parts = [c.logoOption === 'Custom' ? 'Custom' : 'Recommended'];
-          if (c.position) parts.push(c.position);
-          if (c.colour) parts.push(c.colour);
-          if (c.specialInstructions) parts.push(`"${c.specialInstructions}"`);
+          if (c.position) parts.push(escapeHtml(c.position));
+          if (c.colour) parts.push(escapeHtml(c.colour));
+          if (c.specialInstructions) parts.push('&ldquo;' + escapeHtml(c.specialInstructions) + '&rdquo;');
           crestingText = parts.join(' · ');
         }
 
         html += `
           <tr style="background:${bg};">
-            <td style="padding:5px 10px;border:1px solid #ddd;">${item.productName || sku}</td>
-            <td style="padding:5px 10px;border:1px solid #ddd;font-family:monospace;white-space:nowrap;">${sku}</td>
-            <td style="padding:5px 10px;border:1px solid #ddd;white-space:nowrap;">${product?.colour || '—'}</td>`;
+            <td style="padding:5px 10px;border:1px solid #ddd;">${escapeHtml(item.productName || sku)}</td>
+            <td style="padding:5px 10px;border:1px solid #ddd;font-family:monospace;white-space:nowrap;">${escapeHtml(sku)}</td>
+            <td style="padding:5px 10px;border:1px solid #ddd;white-space:nowrap;">${escapeHtml(product?.colour || '—')}</td>`;
 
         orderedSizes.forEach(size => {
           const qty = sizes[size] || 0;
@@ -2697,9 +2705,18 @@ async function buildAndOpenMailto(orderId, account, manager, date, comments) {
   // ── ASSEMBLE FULL HTML DOCUMENT ─────────────────────────────────────────────
   const monthsHTML = buildMonthsHTML(groups);
 
+  // XSS01 — escape every customer/admin-supplied field before email assembly.
+  // Email body is built then sent to Brevo; without escaping, customer-typed
+  // comments / specialInstructions can inject HTML into the recipient's view.
+  const escAccount   = escapeHtml(account);
+  const escManager   = escapeHtml(manager || '—');
+  const escComments  = escapeHtml(comments || '—');
+  const escDispDate  = escapeHtml(displayDate);
+  const escOrderId   = escapeHtml(orderId);
+
   const fullHTML = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
-<title>FootJoy Prebook Order — ${account} — ${displayDate}</title>
+<title>FootJoy Prebook Order — ${escAccount} — ${escDispDate}</title>
 </head>
 <body style="margin:0;padding:24px 32px;background:#f5f6fa;font-family:Arial,sans-serif;">
 
@@ -2714,7 +2731,7 @@ async function buildAndOpenMailto(orderId, account, manager, date, comments) {
                     letter-spacing:2px;text-transform:uppercase;">
           FootJoy Apparel — Prebook Order
         </div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">Order ID: ${orderId}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">Order ID: ${escOrderId}</div>
       </div>
     </div>
 
@@ -2722,15 +2739,15 @@ async function buildAndOpenMailto(orderId, account, manager, date, comments) {
     <table style="width:100%;font-size:12px;margin-bottom:24px;border-collapse:collapse;">
       <tr>
         <td style="padding:4px 0;color:#555;width:130px;">Account:</td>
-        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${account}</td>
+        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${escAccount}</td>
         <td style="padding:4px 0;color:#555;width:120px;">Order Date:</td>
-        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${displayDate}</td>
+        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${escDispDate}</td>
       </tr>
       <tr>
         <td style="padding:4px 0;color:#555;">Account Manager:</td>
-        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${manager || '—'}</td>
+        <td style="padding:4px 0;font-weight:600;color:${NAVY};">${escManager}</td>
         <td style="padding:4px 0;color:#555;">Comments:</td>
-        <td style="padding:4px 0;color:${NAVY};">${comments || '—'}</td>
+        <td style="padding:4px 0;color:${NAVY};">${escComments}</td>
       </tr>
     </table>
 
@@ -3417,8 +3434,8 @@ async function init() {
     // Wait for session check to finish so we know if user is a rep or customer
     await sessionCheckDone;
 
-    // Rep: has from=dashboard flag OR is logged in (window.currentUser set by checkExistingSession)
-    var isRepViewing = fromDashboard || !!window.currentUser;
+    // Rep: has from=dashboard flag OR is logged in (currentUser set by checkExistingSession)
+    var isRepViewing = fromDashboard || !!currentUser;
     if (!isRepViewing) {
       isCustomerDraftMode = true;
     }
@@ -3557,7 +3574,7 @@ function closeHeaderMenu() {
   if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 function populateHeaderMenuProfile() {
-  const u = window.currentUser || {};
+  const u = currentUser || {};
   const nameEl  = document.getElementById('header-menu-profile-name');
   const emailEl = document.getElementById('header-menu-profile-email');
   if (nameEl)  nameEl.textContent  = u.name || 'Signed in';

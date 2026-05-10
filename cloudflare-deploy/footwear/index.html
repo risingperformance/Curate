@@ -14,8 +14,10 @@
   object-src  'none';
   base-uri    'self';
   form-action 'self';
+  frame-ancestors 'none';
 ">
-<meta http-equiv="X-Frame-Options" content="DENY">
+<!-- CSP02 — X-Frame-Options is browser-ignored when set via <meta http-equiv>.
+     frame-ancestors 'none' in the CSP above does the same job (and is honoured in meta). -->
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>FootJoy Curate AW27 Footwear</title>

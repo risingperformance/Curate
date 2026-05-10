@@ -14,6 +14,11 @@ let baseSkuMap   = {};  // sku -> base_sku for image lookups
 let openSeasonIds = new Set();  // active seasons -> Top Products filter
 let includePrebook = false;
 
+// AUTH12 — currentUser is module-scoped (was on window). Reduces XSS exfil
+// surface and prevents client-side role tampering via DevTools.
+let currentUser = null;
+function getCurrentUser() { return currentUser || {}; }
+
 // ── XSS HELPERS ─────────────────────────────────────────────────────────────
 function escapeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -44,7 +49,7 @@ async function handleLogin() {
     await supa.auth.signOut();
     return;
   }
-  window.currentUser = {
+  currentUser = {
     name:    sp.name    || '',
     email:   sp.email   || email,
     role:    sp.role    || 'rep',
@@ -61,7 +66,16 @@ async function handleSignOut() {
 function unlockDashboard() {
   const screen = document.getElementById('login-screen');
   screen.classList.add('unlocked');
+  // AUTH20 — reveal Edit Targets only for admin / manager (still RLS-gated server-side).
+  applyRoleVisibility();
   setTimeout(() => { screen.style.display = 'none'; loadAll(); }, 500);
+}
+
+function applyRoleVisibility() {
+  const u = currentUser || {};
+  const isPrivileged = u.role === 'admin' || u.role === 'manager';
+  const editBtn = document.getElementById('toggle-target-admin');
+  if (editBtn) editBtn.hidden = !isPrivileged;
 }
 
 // Check for existing session on page load
@@ -71,7 +85,7 @@ function unlockDashboard() {
     // Verify still a valid salesperson
     const { data: sp } = await supa.from('salespeople').select('name, email, role, country').eq('email', session.user.email).single();
     if (sp) {
-      window.currentUser = {
+      currentUser = {
         name:    sp.name    || '',
         email:   sp.email   || session.user.email,
         role:    sp.role    || 'rep',
@@ -508,18 +522,17 @@ function renderTopProducts() {
     const imgUrl  = productImgUrl(r.sku);
     const thumbCell = imgUrl
       ? `<div class="thumb-wrap">
-           <img class="thumb-img" src="${imgUrl}" alt="${escapeAttr(r.desc)}" loading="lazy" data-img-fallback="thumb">
-           <div class="thumb-hover"><img src="${imgUrl}" alt="${escapeAttr(r.desc)}" data-img-fallback="thumb-hover"></div>
+           <img class="thumb-img" src="${escapeAttr(imgUrl)}" alt="${escapeAttr(r.desc)}" loading="lazy" data-img-fallback="thumb">
+           <div class="thumb-hover"><img src="${escapeAttr(imgUrl)}" alt="${escapeAttr(r.desc)}" data-img-fallback="thumb-hover"></div>
          </div>`
       : `<div class="thumb-placeholder">👕</div>`;
     const metricVal = byDollars ? `$${Math.round(r.dollars).toLocaleString()}` : r.units.toLocaleString();
-    const escapedSku = r.sku.replace(/'/g, "\\'");
 
     tbody.innerHTML += `
-      <tr class="product-row" data-action="toggleProductDetail" data-sku="${escapedSku}">
+      <tr class="product-row" data-action="toggleProductDetail" data-sku="${escapeAttr(r.sku)}">
         <td><span class="rank-badge ${rankCls}">${rank}</span></td>
         <td style="padding:6px 10px">${thumbCell}</td>
-        <td style="font-family:monospace;font-size:12px">${r.sku}</td>
+        <td style="font-family:monospace;font-size:12px">${escapeHtml(r.sku)}</td>
         <td style="font-weight:500">${escapeHtml(r.desc || '—')}</td>
         <td style="font-size:12px;color:var(--mid)">${escapeHtml(r.collection || '—')}</td>
         <td class="right">${r.accounts.size}</td>
@@ -825,7 +838,7 @@ function renderOrders() {
     const acctKey   = (g.account_name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     tbody.innerHTML += `
-      <tr class="order-row${count > 1 ? '' : ''}" data-action="toggleOrderDetail" data-key="${acctKey}" style="cursor:pointer">
+      <tr class="order-row${count > 1 ? '' : ''}" data-action="toggleOrderDetail" data-key="${escapeAttr(acctKey)}" style="cursor:pointer">
         <td style="font-weight:600">${escapeHtml(g.account_name)}${countBadge}</td>
         <td>${escapeHtml(g.account_manager)}</td>
         <td>${escapeHtml(g.country)}</td>
@@ -833,8 +846,8 @@ function renderOrders() {
         <td class="right" style="font-size:12px;color:var(--mid)">$${Math.round(g.totalValue).toLocaleString()}</td>
         <td class="right" style="font-size:13px;color:var(--mid)">${g.prior.toLocaleString()}</td>
         <td class="right ${diffCls}" style="font-size:13px">${diffText}</td>
-        <td style="font-size:12px;color:var(--mid)">${dateStr}</td>
-        <td><span class="status-badge ${statusCls}">${status}</span></td>
+        <td style="font-size:12px;color:var(--mid)">${escapeHtml(dateStr)}</td>
+        <td><span class="status-badge ${statusCls}">${escapeHtml(status)}</span></td>
       </tr>`;
   });
 
@@ -876,11 +889,11 @@ function toggleOrderDetail(acctKey, rowEl) {
     const oid   = o.order_id || '—';
     orderRows += `<tr>
       <td style="font-weight:600">Order ${idx + 1}</td>
-      <td style="color:var(--mid)">${oid}</td>
-      <td>${o.country || '—'}</td>
+      <td style="color:var(--mid)">${escapeHtml(oid)}</td>
+      <td>${escapeHtml(o.country || '—')}</td>
       <td class="right" style="font-weight:700">${units.toLocaleString()}</td>
       <td class="right" style="color:var(--mid)">$${Math.round(value).toLocaleString()}</td>
-      <td style="font-size:12px;color:var(--mid)">${date}</td>
+      <td style="font-size:12px;color:var(--mid)">${escapeHtml(date)}</td>
     </tr>`;
   });
 
@@ -956,17 +969,17 @@ function renderDrafts() {
     const draftUrl = `apparel/index.html#draft=${encodeURIComponent(d.token)}&from=dashboard`;
 
     tbody.innerHTML += `
-      <tr id="draft-row-${d.token}">
+      <tr id="draft-row-${escapeAttr(d.token)}">
         <td style="font-weight:600">${escapeHtml(accountName)}</td>
         <td>${escapeHtml(managerName)}</td>
         <td class="right">${units.toLocaleString()}</td>
-        <td style="font-size:12px;color:var(--mid)">${createdStr}</td>
-        <td style="font-size:12px;color:var(--mid)">${expiresStr}</td>
+        <td style="font-size:12px;color:var(--mid)">${escapeHtml(createdStr)}</td>
+        <td style="font-size:12px;color:var(--mid)">${escapeHtml(expiresStr)}</td>
         <td>${statusBadge}</td>
         <td>
           <div class="draft-actions">
-            ${!isExpired ? `<a class="btn-open-draft" href="${draftUrl}" target="_blank">✏️ Open</a>` : ''}
-            <button class="btn-delete-draft" data-action="deleteDraft" data-token="${d.token}">✕</button>
+            ${!isExpired ? `<a class="btn-open-draft" href="${escapeAttr(draftUrl)}" target="_blank">✏️ Open</a>` : ''}
+            <button class="btn-delete-draft" data-action="deleteDraft" data-token="${escapeAttr(d.token)}">✕</button>
           </div>
         </td>
       </tr>`;
@@ -1029,6 +1042,14 @@ function toggleTargetPanel() {
 }
 
 async function saveTargets() {
+  // AUTH20 — defence-in-depth: refuse client-side if not privileged. RLS is the
+  // server-side fence, but blocking here surfaces a clearer error and prevents
+  // pointless DB round-trips from a tampered-DOM rep.
+  const u = currentUser || {};
+  if (u.role !== 'admin' && u.role !== 'manager') {
+    document.getElementById('target-save-status').textContent = 'Only managers and admins can edit targets.';
+    return;
+  }
   document.getElementById('target-save-status').textContent = 'Saving…';
   const orderReps = new Set(allOrders.filter(o => o.account_manager).map(o => o.account_manager));
   const allReps = [...new Set([...Object.keys(targets), ...orderReps])];
@@ -1067,7 +1088,7 @@ function toggleHeaderMenu() {
   var btn  = document.getElementById('header-menu-btn');
   if (!menu || !btn) return;
   if (menu.hidden) {
-    var u = window.currentUser || {};
+    var u = currentUser || {};
     var nameEl  = document.getElementById('header-menu-profile-name');
     var emailEl = document.getElementById('header-menu-profile-email');
     if (nameEl)  nameEl.textContent  = u.name  || 'Signed in';

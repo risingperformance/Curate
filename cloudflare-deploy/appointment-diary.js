@@ -873,8 +873,12 @@ function updateSubjectPreview() {
   }
 }
 
-function escHtml(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// XSS11 — single canonical escHtml (was duplicated). Handles null/undefined,
+// escapes all five HTML-significant chars (&, <, >, ", ').
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function replacePlaceholders(text, vars) {
@@ -1225,7 +1229,7 @@ function previewLink() {
 }
 
 async function sendInvite() {
-  console.log('[diary] sendInvite click, mode=' + inviteMode);
+  // F14/DB22 — debug log removed.
   const sendBtn = document.getElementById('m-invite-send');
   const email   = document.getElementById('inv-email').value.trim();
   const selIds  = [...document.querySelectorAll('#slot-picker input[type=checkbox]:checked')].map(cb => cb.value);
@@ -1279,7 +1283,7 @@ async function sendInvite() {
   }).select().single();
 
   if (error) {
-    console.error('[diary] booking_invitations insert failed', error);
+    // F14/DB22 — do not console.error full Postgres error (may include row contents on uniqueness violations).
     showError('Could not create invitation: ' + (error.message || 'database error'));
     restoreBtn();
     return;
@@ -1307,9 +1311,14 @@ async function sendInvite() {
   const emailSubject = replacePlaceholders(tpl.email_subject, buildInviteVars(firstName, lastName, custName, me.name));
 
   try {
-    // Use authenticated session token (not anon key)
+    // AUTH10/F19 — Edge function requires an authenticated user JWT.
+    // No anon-key fallback: a rep without a session should not be sending
+    // invitations, and the function will reject anon callers anyway.
     const { data: { session: _emailSess } } = await sb.auth.getSession();
-    const _emailTok = _emailSess?.access_token || SB_KEY;
+    if (!_emailSess?.access_token) {
+      throw new Error('Your session has expired. Please refresh and sign in again.');
+    }
+    const _emailTok = _emailSess.access_token;
 
     const res = await fetch(EMAIL_EDGE_FN, {
       method: 'POST',
@@ -1340,7 +1349,7 @@ async function sendInvite() {
     const qSel = document.getElementById('quick-cust-sel');
     if (qSel) qSel.style.display = 'none';
   } catch (err) {
-    console.error('[diary] sendInvite email failed', err);
+    // F14/DB22 — no console.error; err object may contain customer email.
     // Always copy the booking link as a fallback so the rep can share it
     // manually if needed.
     try { await navigator.clipboard?.writeText(bookUrl); } catch (_) {}
@@ -1405,7 +1414,7 @@ async function sendBooking({ tpl, custName, firstName, lastName, email, sendBtn,
     status: 'booked'
   }).select().single();
   if (sErr || !slot) {
-    console.error('[diary] sendBooking slot insert failed', sErr);
+    // F14/DB22 — no console.error.
     showError('Could not create the appointment slot: ' + (sErr?.message || 'database error'));
     restoreBtn();
     return;
@@ -1426,7 +1435,7 @@ async function sendBooking({ tpl, custName, firstName, lastName, email, sendBtn,
     status:         'confirmed'
   }).select().single();
   if (bErr || !bk) {
-    console.error('[diary] sendBooking booking insert failed', bErr);
+    // F14/DB22 — no console.error.
     // Roll the slot back so we don't leave a booked slot with no booking.
     await sb.from('appointment_slots').update({ status: 'cancelled' }).eq('id', slot.id);
     showError('Could not record the booking: ' + (bErr?.message || 'database error'));
@@ -1448,8 +1457,12 @@ async function sendBooking({ tpl, custName, firstName, lastName, email, sendBtn,
                                 slot.location, tpl, firstName, lastName);
 
   try {
+    // AUTH10/F19 — require authenticated session; no anon fallback.
     const { data: { session: _emailSess } } = await sb.auth.getSession();
-    const _emailTok = _emailSess?.access_token || SB_KEY;
+    if (!_emailSess?.access_token) {
+      throw new Error('Your session has expired. Please refresh and sign in again.');
+    }
+    const _emailTok = _emailSess.access_token;
     const res = await fetch(EMAIL_EDGE_FN, {
       method: 'POST',
       headers: {
@@ -1472,7 +1485,7 @@ async function sendBooking({ tpl, custName, firstName, lastName, email, sendBtn,
     }
     toast('Appointment booked and confirmation sent to ' + email + '.', 'success');
   } catch (err) {
-    console.error('[diary] sendBooking email failed', err);
+    // F14/DB22 — no console.error; err may include customer_email.
     // Booking is already saved; just warn the rep that the email may
     // not have gone. Same optimistic-close pattern used by sendInvite.
     const isFetchFail = !!(err && /failed to fetch/i.test(err.message || ''));
@@ -1654,11 +1667,7 @@ function durationLabel(start, end) {
   return `${m} min`;
 }
 
-function escHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// XSS11 — second escHtml definition removed; canonical version is above (line ~876).
 
 // ── Calendar chip hover popup ──
 function showChipPopup(target, slot, booking) {

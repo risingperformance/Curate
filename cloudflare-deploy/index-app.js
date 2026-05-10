@@ -19,6 +19,11 @@
 var _sessionReady;
 var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; });
 
+// AUTH12 — currentUser is module-scoped (was on window). Reduces XSS exfil
+// surface and prevents client-side role tampering via DevTools.
+var currentUser = null;
+function getCurrentUser() { return currentUser || {}; }
+
 (function() {
   const screen  = document.getElementById('login-screen');
   const form    = document.getElementById('login-form');
@@ -54,7 +59,7 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
           var userEmail = session.user.email;
           var { data: sp } = await supa.from('salespeople').select('*').eq('email', userEmail).single();
           if (sp) {
-            window.currentUser = {
+            currentUser = {
               name: sp.name || '', email: sp.email || userEmail,
               role: sp.role || 'rep', country: sp.country || null
             };
@@ -79,7 +84,7 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
   // very slow network), show the login after 4s so the user is never
   // left staring at a black screen.
   setTimeout(function () {
-    if (window.currentUser) return;
+    if (currentUser) return;
     var s = document.getElementById('login-screen');
     if (s && !s.classList.contains('visible') && s.style.display !== 'none') {
       s.classList.add('visible');
@@ -104,7 +109,7 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
       return;
     }
 
-    window.currentUser = {
+    currentUser = {
       name:    sp.name || '',
       email:   sp.email || userEmail,
       role:    sp.role || 'rep',
@@ -168,21 +173,11 @@ var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; 
 
 async function signOut() {
   await supa.auth.signOut();
-  window.currentUser = null;
-  // Hide landing + app, show login screen
-  const landing = document.getElementById('season-landing');
-  if (landing) { landing.style.display = 'none'; }
-  document.getElementById('app-header').style.display = 'none';
-  document.getElementById('app-main').style.display = 'none';
-  document.getElementById('app-footer').style.display = 'none';
-  const login = document.getElementById('login-screen');
-  login.classList.remove('fade-out');
-  login.classList.add('visible');     // CSS hides by default; reveal explicitly
-  login.style.display = '';
-  document.getElementById('login-email').value = '';
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-error').textContent = '';
-  document.getElementById('login-email').focus();
+  // Hard reload after sign-out wipes any in-memory caches (top products,
+  // appointment lists, draft data) that would otherwise persist as stale
+  // PII addressable via DevTools on a shared / kiosk device. Other staff
+  // pages (admin, dashboard, diary) already do this. AUTH13 fix May 2026.
+  window.location.reload();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -251,7 +246,7 @@ async function showSeasonLanding() {
   // Apparel needs JS-side filtering to the current user (RLS on
   // draft_orders is open to all authenticated). Footwear is already
   // filtered by RLS so we render whatever comes back.
-  const cu = window.currentUser || {};
+  const cu = currentUser || {};
   const isAdminUser = (cu.role === 'admin');
   const myName = (cu.name || '').trim().toLowerCase();
   const visibleApparelDrafts = (apparelDraftsRes.data || []).filter(d => {
@@ -298,7 +293,7 @@ async function showSeasonLanding() {
   });
 
   // Greeting name from currentUser if available
-  const cuName = (window.currentUser && window.currentUser.name) || '';
+  const cuName = (currentUser && currentUser.name) || '';
   const greetEl = document.getElementById('dash-greeting-name');
   if (greetEl) greetEl.textContent = cuName ? `Welcome back, ${cuName.split(' ')[0]}.` : 'Welcome back.';
 
@@ -488,13 +483,20 @@ function renderTopProducts(cat) {
 }
 
 async function fetchNextAppointments(n) {
+  // DB07 — filter to the rep's own bookings (admins/managers see everyone).
+  // RLS may already enforce this server-side, but mirroring it client-side
+  // tightens the cross-rep PII bound on the home dashboard.
   const today = new Date().toISOString().slice(0, 10);
-  const res = await supa.from('appointment_bookings')
+  const u = currentUser || {};
+  const isPrivileged = u.role === 'admin' || u.role === 'manager';
+  let q = supa.from('appointment_bookings')
     .select('id, date, start_time, end_time, customer_name, am_name, location')
     .gte('date', today)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
     .limit(n);
+  if (!isPrivileged && u.name) q = q.eq('am_name', u.name);
+  const res = await q;
   return res.data || [];
 }
 
@@ -600,7 +602,7 @@ function closeDashMenu() {
   if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 function populateDashMenu() {
-  const u = window.currentUser || {};
+  const u = currentUser || {};
   const nameEl  = document.getElementById('dash-menu-profile-name');
   const emailEl = document.getElementById('dash-menu-profile-email');
   const adminEl = document.getElementById('dash-menu-admin');

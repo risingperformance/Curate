@@ -207,6 +207,11 @@ const state = {
   bucketFiles: {}, // { bucketName: [fileList] }
 };
 
+// AUTH12 — adminUser is module-scoped (was on window). Reduces XSS exfil
+// surface and prevents client-side role tampering via DevTools.
+let adminUser = null;
+function getAdminUser() { return adminUser || {}; }
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOCAL PREFERENCE PERSISTENCE (sort + column widths)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -263,7 +268,7 @@ async function handleLogin() {
     await supa.auth.signOut();
     return;
   }
-  window.adminUser = { name: sp.name || '', email: sp.email || email, role: sp.role };
+  adminUser = { name: sp.name || '', email: sp.email || email, role: sp.role };
   unlockAdmin();
 }
 
@@ -286,7 +291,7 @@ function unlockAdmin() {
   if (session) {
     const { data: sp } = await supa.from('salespeople').select('name, role, email').eq('email', session.user.email).single();
     if (sp && sp.role === 'admin') {
-      window.adminUser = { name: sp.name || '', email: sp.email || session.user.email, role: sp.role };
+      adminUser = { name: sp.name || '', email: sp.email || session.user.email, role: sp.role };
       unlockAdmin();
       return;
     }
@@ -1125,7 +1130,7 @@ function reviewCsvUpload(tableName, rows, csvCols) {
       Preview (first 3 rows):
     </div>
     <div style="max-height:180px;overflow:auto;background:var(--bg);padding:10px;border-radius:6px;font-family:monospace;font-size:11px;">
-      ${rows.slice(0, 3).map(r => JSON.stringify(r)).join('<br><br>')}
+      ${rows.slice(0, 3).map(r => escapeHtml(JSON.stringify(r))).join('<br><br>')}
     </div>
 
     <div class="modal-actions">
@@ -1866,7 +1871,7 @@ function closeAdminHeaderMenu() {
 function populateAdminHeaderMenu() {
   // Read identity from the local cached salesperson record (already
   // looked up at login). Falls back to the auth user email if needed.
-  const u = window.adminUser || {};
+  const u = adminUser || {};
   const nameEl  = document.getElementById('header-menu-profile-name');
   const emailEl = document.getElementById('header-menu-profile-email');
   if (nameEl)  nameEl.textContent  = u.name ? 'Signed in as ' + u.name : 'Signed in';
