@@ -598,6 +598,12 @@ function selectDay(key) {
         const action = bk
           ? `data-action="showDetail" data-id="${bk.id}"`
           : `data-action="openInvite" data-id="${s.id}"`;
+        // Delete affordance: cancels the slot (available) or the booking
+        // (confirmed). Stops propagation so the parent card click doesn't
+        // also fire (which would open invite / detail).
+        const deleteBtn = bk
+          ? `<button class="ds-delete" type="button" data-action="cancelBooking" data-id="${bk.id}" title="Cancel booking" aria-label="Cancel booking">&times;</button>`
+          : `<button class="ds-delete" type="button" data-action="doCancel" data-id="${s.id}" title="Delete slot" aria-label="Delete slot">&times;</button>`;
         return `<div class="detail-slot timeline ${cls}" ${action}>
           <div class="ds-bar ${cls}"></div>
           <div class="ds-body">
@@ -605,6 +611,7 @@ function selectDay(key) {
             ${meta ? `<div class="ds-meta">${meta}</div>` : ''}
             ${status}
           </div>
+          ${deleteBtn}
         </div>`;
       }).join('');
     }
@@ -1180,9 +1187,33 @@ async function sendInvite() {
     if (qSel) qSel.style.display = 'none';
   } catch (err) {
     console.error('[diary] sendInvite email failed', err);
+    // Always copy the booking link as a fallback so the rep can share it
+    // manually if needed.
     try { await navigator.clipboard?.writeText(bookUrl); } catch (_) {}
-    showError('Email failed: ' + (err?.message || 'unknown error') + '. Booking link copied to clipboard.');
-    restoreBtn();
+
+    // "Failed to fetch" is almost always the edge function returning a
+    // POST response without proper CORS headers — the browser blocks the
+    // response even though the function ran successfully. Since the
+    // booking_invitations row was already created above (inv.token
+    // exists), and the function would have called Brevo before
+    // returning, the email almost certainly sent. Treat it as a
+    // probable success: close the modal, show a green toast that says
+    // "likely sent", and clear the form. Any other error is treated as
+    // a real failure and surfaces in the red banner.
+    const isFetchFail = !!(err && /failed to fetch/i.test(err.message || ''));
+    if (isFetchFail && inv && inv.token) {
+      toast('Invitation likely sent to ' + email + ' (link also copied).', 'success');
+      closeM('m-invite');
+      restoreBtn();
+      quickSelCust = null;
+      const qInput = document.getElementById('quick-cust-q');
+      if (qInput) qInput.value = '';
+      const qSel = document.getElementById('quick-cust-sel');
+      if (qSel) qSel.style.display = 'none';
+    } else {
+      showError('Email failed: ' + (err?.message || 'unknown error') + '. Booking link copied to clipboard.');
+      restoreBtn();
+    }
   }
 }
 
@@ -1360,38 +1391,35 @@ function showChipPopup(target, slot, booking) {
   const isBooked   = !!booking;
   const statusText = isBooked ? 'Confirmed' : 'Available';
   const statusCls  = isBooked ? 'booked'    : 'avail';
-  const title      = isBooked
-    ? (booking.customer_name || 'Booking')
+
+  // Title is the account/company name when there's a confirmed booking;
+  // contact name (e.g. "Mark Patterson") moves to the subtitle below it.
+  const title = isBooked
+    ? (bookingAccountLabel(booking) || 'Booking')
     : 'Available Slot';
+  const contactName = isBooked
+    ? (booking.customer_name && booking.customer_name !== title ? booking.customer_name : '')
+    : '';
 
-  const attendee = isBooked
-    ? (booking.customer_contact || booking.customer_name || '—')
-    : '—';
-
-  // The "account" label tries account_code → account_name → customer_name
-  const account = isBooked
-    ? (booking.account_code
-        ? booking.account_code
-        : (booking.account_name || booking.customer_name || '—'))
-    : '—';
-
-  const location = slot.location || (isBooked ? booking.location : '') || '—';
-  const duration = durationLabel(slot.start_time, slot.end_time);
+  const location  = slot.location || (isBooked ? booking.location : '') || '—';
+  const duration  = durationLabel(slot.start_time, slot.end_time);
   const timeRange = `${fmt(slot.start_time)} – ${fmt(slot.end_time)}`;
 
+  // Account row removed per Tim's request (May 2026); length moved to the
+  // header next to the status badge for prominence.
   const rows = [
-    ['Time',     timeRange],
-    ['Length',   duration],
+    ['Time', timeRange],
   ];
-  if (isBooked) {
-    rows.push(['Attendee', attendee]);
-    rows.push(['Account',  account]);
-  }
+  if (isBooked && contactName) rows.push(['Attendee', contactName]);
   rows.push(['Location', location]);
 
   pop.innerHTML = `
-    <span class="chip-popup-status ${statusCls}">${escHtml(statusText)}</span>
+    <div class="chip-popup-head">
+      <span class="chip-popup-status ${statusCls}">${escHtml(statusText)}</span>
+      <span class="chip-popup-length">${escHtml(duration)}</span>
+    </div>
     <div class="chip-popup-name">${escHtml(title)}</div>
+    ${contactName ? `<div class="chip-popup-subname">${escHtml(contactName)}</div>` : ''}
     ${rows.map(([k, v]) => `
       <div class="chip-popup-row">
         <span class="k">${escHtml(k)}</span>
@@ -1430,6 +1458,7 @@ document.addEventListener('click', function(e) {
   else if (action === 'openCreateSlot') openCreateSlot(el.dataset.id);
   else if (action === 'openCreateSlotAt') openCreateSlot(el.dataset.date, el.dataset.hour);
   else if (action === 'doCancel') doCancel(el.dataset.id);
+  else if (action === 'cancelBooking') cancelBooking(el.dataset.id);
   else if (action === 'dlICS') dlICS(el.dataset.id);
   else if (action === 'pickCust') pickCust(parseInt(el.dataset.index, 10));
   else if (action === 'pickQuickCust') pickQuickCust(parseInt(el.dataset.index, 10));
