@@ -132,16 +132,29 @@ function showTab(id) {
 async function loadAll() {
   document.getElementById('last-updated').textContent = 'Refreshing…';
 
+  // DB05/DB06 — explicit column lists (no select '*') so legacy / future
+  // sensitive columns (e.g. orders.pin until the ALTER DROP COLUMN runs)
+  // do not ship to the client. Add fields here as the dashboard needs them.
   const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes, seasonsRes] = await Promise.all([
-    supa.from('orders').select('*').order('order_date', { ascending: false }),
-    supa.from('order_lines').select('*'),
+    supa.from('orders').select(
+      'order_id, account_name, account_code, account_manager, country, order_date, status, created_at'
+    ).order('order_date', { ascending: false }),
+    supa.from('order_lines').select(
+      'id, order_id, sku, size, qty, unit_price, line_total, category, delivery_month'
+    ),
     // Apparel-only here. After AW27 footwear launches the dashboard will
     // need to surface footwear targets too; until then keep current
     // behaviour by filtering on category.
-    supa.from('sales_targets').select('*').eq('category', 'apparel'),
-    supa.from('customers').select('*'),
-    supa.from('draft_orders').select('*').order('created_at', { ascending: false }),
-    supa.from('customer_season_history').select('*'),
+    supa.from('sales_targets').select('name, season, category, target').eq('category', 'apparel'),
+    supa.from('customers').select(
+      'account_code, account_name, contact_first, contact_last, contact_email, country, manager_user_id'
+    ),
+    supa.from('draft_orders').select(
+      'token, customer_data, order_data, created_at, expires_at'
+    ).order('created_at', { ascending: false }),
+    supa.from('customer_season_history').select(
+      'account_code, account_name, season, total_units, total_value'
+    ),
     supa.from('products').select('sku, base_sku'),
     supa.from('salespeople').select('name, country'),
     supa.from('seasons').select('season_id, status').eq('status', 'active')
@@ -1038,6 +1051,11 @@ function populateTargetInputs() {
 }
 
 function toggleTargetPanel() {
+  // DB16 — refuse to open the panel for non-privileged users even if the
+  // toggle button was somehow revealed (DevTools removing the hidden attr).
+  // RLS on sales_targets remains the actual server-side fence.
+  const u = currentUser || {};
+  if (u.role !== 'admin' && u.role !== 'manager') return;
   document.getElementById('target-admin-panel').classList.toggle('active');
 }
 

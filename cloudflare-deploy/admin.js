@@ -107,6 +107,10 @@ const TABLES = {
     // Used by the appointment diary's Send Invitation flow (was previously
     // edited inside the diary's own Templates tab; moved here May 2026).
     defaultColumns: ['name', 'email_subject', 'heading', 'intro_text', 'is_active'],
+    // XSS02/XSS03 — these columns are rendered as raw HTML in customer
+    // emails. saveChanges() runs each value through sanitiseHtml() (allow-
+    // list of basic formatting tags only) before write.
+    htmlColumns: ['intro_text'],
   },
 };
 
@@ -327,8 +331,41 @@ function unlockAdmin() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function init() {
+  // DB18 — server-side admin verification round-trip. The login flow already
+  // checks role=admin from a salespeople SELECT, but a tampered DOM (or a
+  // stale localStorage session whose underlying salespeople row was demoted)
+  // can render this page. Re-fetch and re-check before exposing any panel.
+  const verified = await verifyAdminServerSide();
+  if (!verified) {
+    document.body.innerHTML =
+      '<div style="padding:48px 24px;font-family:Arial,sans-serif;text-align:center">' +
+        '<h1 style="font-size:20px;margin-bottom:12px">Access denied</h1>' +
+        '<p style="color:#666;font-size:14px;margin-bottom:24px">Your account does not have admin access.</p>' +
+        '<a href="index.html" style="color:#1F4E79;font-size:14px">&larr; Back to Home</a>' +
+      '</div>';
+    try { await supa.auth.signOut(); } catch (_) {}
+    return;
+  }
   setupImageTab();
   await setupTabs();
+}
+
+async function verifyAdminServerSide() {
+  try {
+    const { data: { session } } = await supa.auth.getSession();
+    if (!session) return false;
+    // Re-query salespeople via authed client. If RLS blocks the read OR the
+    // role is not admin OR the row is gone, refuse to render anything.
+    const { data: sp, error } = await supa
+      .from('salespeople')
+      .select('role')
+      .eq('email', session.user.email)
+      .single();
+    if (error || !sp) return false;
+    return sp.role === 'admin';
+  } catch (_) {
+    return false;
+  }
 }
 
 // Wires the section + sub-tab buttons, restores section/tab from the URL,
@@ -992,6 +1029,20 @@ async function saveChanges(tableName) {
     }
   }
 
+  // XSS02/XSS03 — sanitise any HTML columns declared on the table config
+  // BEFORE the row hits the DB. The render side then only ever loads
+  // already-clean HTML. Currently used by email_templates.intro_text.
+  const htmlCols = (cfg.htmlColumns) || [];
+  if (htmlCols.length > 0) {
+    for (const row of [...updates, ...inserts]) {
+      for (const col of htmlCols) {
+        if (row[col] != null && row[col] !== '') {
+          row[col] = sanitiseHtml(row[col]);
+        }
+      }
+    }
+  }
+
   let saveError = null;
   if (updates.length > 0) {
     const { error } = await supa.from(physicalTable).upsert(updates, { onConflict: rowKeyConflict });
@@ -1175,6 +1226,16 @@ async function commitCsvUpload(tableName) {
     if (cfg.defaults) {
       for (const [k, v] of Object.entries(cfg.defaults)) {
         if (out[k] === undefined || out[k] === null || out[k] === '') out[k] = v;
+      }
+    }
+    // XSS02/XSS03 — sanitise any HTML-bearing columns coming via CSV.
+    // Mirrors the saveChanges() pattern so a malicious CSV cannot bypass
+    // the sanitiser by uploading raw <script>...</script> in intro_text.
+    if (cfg.htmlColumns) {
+      for (const col of cfg.htmlColumns) {
+        if (out[col] != null && out[col] !== '') {
+          out[col] = sanitiseHtml(out[col]);
+        }
       }
     }
     return out;
@@ -1729,6 +1790,83 @@ function escapeHtml(str) {
 function escapeAttr(str) { return escapeHtml(String(str)).replace(/"/g, '&quot;'); }
 function escapeJs(str) { return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
+// XSS02/XSS03 — minimal allow-list HTML sanitiser used to scrub
+// `email_templates.intro_text` BEFORE it is written to the database.
+// Strategy: parse with DOMParser into an isolated document, walk every
+// node, drop any tag/attribute not on the explicit allow-list, then
+// serialise back. Far smaller than DOMPurify and sufficient for the
+// narrow use case (rich-text email intro). If the allow-list ever needs
+// to expand, the right move is to switch to DOMPurify proper, NOT to
+// loosen this code.
+const SAFE_TAGS = new Set([
+  'P','BR','STRONG','B','EM','I','U','SPAN','DIV',
+  'UL','OL','LI','BLOCKQUOTE',
+  'H1','H2','H3','H4','H5','H6',
+  'A'
+]);
+// Per-tag allowed attributes. All others are stripped.
+const SAFE_ATTRS = {
+  '*': new Set([]),               // global allow-list (none — keep clean)
+  'A': new Set(['href','title']), // hrefs further validated below
+  'SPAN': new Set([]),            // no class / style — keep tight
+  'DIV': new Set([])
+};
+function sanitiseHtml(input) {
+  const raw = String(input == null ? '' : input);
+  if (!raw.trim()) return '';
+  // Parse into an isolated HTML document so script tags etc. cannot run.
+  const doc = new DOMParser().parseFromString('<div>' + raw + '</div>', 'text/html');
+  const root = doc.body.firstChild;
+  if (!root) return '';
+  walkAndScrub(root);
+  return root.innerHTML;
+}
+function walkAndScrub(node) {
+  // Iterate over a snapshot of children; we mutate during iteration.
+  const kids = Array.from(node.childNodes);
+  for (const child of kids) {
+    if (child.nodeType === 1 /* ELEMENT */) {
+      const tag = child.tagName;
+      if (!SAFE_TAGS.has(tag)) {
+        // Replace the disallowed element with its text content (preserves
+        // visible text but strips the tag and any handlers).
+        const text = doc_text(child);
+        child.replaceWith(document.createTextNode(text));
+        continue;
+      }
+      // Strip every attribute not explicitly allow-listed.
+      const allowed = SAFE_ATTRS[tag] || SAFE_ATTRS['*'];
+      for (const attr of Array.from(child.attributes)) {
+        if (!allowed.has(attr.name.toLowerCase())) {
+          child.removeAttribute(attr.name);
+        }
+      }
+      // Validate <a href> protocol.
+      if (tag === 'A' && child.hasAttribute('href')) {
+        const href = child.getAttribute('href') || '';
+        if (!/^(https?:|mailto:|#|\/)/i.test(href.trim())) {
+          child.removeAttribute('href');
+        } else {
+          // Force safe rel/target on outbound links.
+          child.setAttribute('rel', 'noopener noreferrer');
+          child.setAttribute('target', '_blank');
+        }
+      }
+      // Recurse into the now-cleaned element.
+      walkAndScrub(child);
+    } else if (child.nodeType !== 3 /* not TEXT */ && child.nodeType !== 8 /* not COMMENT */) {
+      // Drop anything else (CDATA, processing instructions, etc.).
+      child.remove();
+    } else if (child.nodeType === 8) {
+      // Strip HTML comments — they can hide IE conditional <script>.
+      child.remove();
+    }
+  }
+}
+function doc_text(el) {
+  return el.textContent || '';
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SPECIFIC EVENT LISTENERS (refactored from inline handlers)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1773,11 +1911,15 @@ function closeInviteUserModal() {
   if (overlay) overlay.hidden = true;
 }
 function generateTempPassword() {
-  // 12-character mixed password; trivial to share verbally and meets
-  // Supabase's default 6-char minimum with margin.
+  // AUTH15 — cryptographically secure random source via crypto.getRandomValues
+  // (was Math.random which is not CSPRNG-grade). 14 chars from a 56-char
+  // alphabet -> ~81 bits of entropy, well above brute-force feasibility for
+  // any reasonable admin-invite SLA.
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const buf = new Uint8Array(14);
+  crypto.getRandomValues(buf);
   let out = '';
-  for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < buf.length; i++) out += chars[buf[i] % chars.length];
   return out;
 }
 

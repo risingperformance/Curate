@@ -1,0 +1,17 @@
+# BAK01 — keep backup / temp files out of the deploy path so they don't get
+# served by GitHub Pages.
+*.backup
+*.bak
+*.bak2
+*.bak3
+*.orig
+*.swp
+*.tmp
+.DS_Store
+
+# Editor / OS noise
+Thumbs.db
+*~
+
+# OneDrive sync conflicts
+*conflict*

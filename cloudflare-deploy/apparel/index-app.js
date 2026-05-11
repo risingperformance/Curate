@@ -2346,11 +2346,11 @@ async function confirmSubmit() {
     const customerGroup = custRecord?.group || '';
 
     // 1. INSERT into orders
+    // DB05 — pin column dropped May 2026 (PINs deprecated since Apr 2026).
     const { error: orderError } = await supa
       .from('orders')
       .insert({
         order_id: orderId,
-        pin: null,  // PINs deprecated - using Supabase Auth
         account_name: account,
         account_manager: manager,
         customer_group: customerGroup,
@@ -3338,10 +3338,13 @@ async function sendDraftLink() {
     return;
   }
 
-  // Generate unique token (12-char alphanumeric)
-  const token = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') :
-    Array.from(crypto.getRandomValues(new Uint8Array(9)))
-         .map(b => b.toString(36)).join('')).slice(0, 12);
+  // DB04 — full UUID (32 hex chars / 128 bits) instead of truncated 12-char.
+  // The dropped `.slice(0, 12)` was leaving ~48 bits which is brute-forceable
+  // for a determined attacker who can scrape a few logged links.
+  const token = (crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '')
+    : Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0')).join(''));
 
   // Customer info
   const accountInput = document.getElementById('account');
@@ -3381,7 +3384,7 @@ async function sendDraftLink() {
       `Your draft FootJoy 2027 Autumn Winter Apparel Prebook order is ready for your review.\n\n` +
       `You can view and edit your draft order using the link below:\n\n` +
       `${draftUrl}\n\n` +
-      `This link will expire in 30 days.\n\n` +
+      `This link will expire in 14 days.\n\n` +
       `Please contact me if you have any questions.`;
 
     window.location.href =

@@ -127,51 +127,51 @@ async function confirmBooking() {
   btn.textContent = 'Confirming\u2026';
   btn.disabled = true;
 
-  // Double-check slot is still available (race condition guard)
-  const { data: slotCheck } = await sb.from('appointment_slots').select('status').eq('id', selectedSlot.id).single();
-  if (!slotCheck || slotCheck.status !== 'available') {
-    toast('Sorry, this slot was just taken. Please go back and choose another time.');
-    btn.textContent = 'Confirm Booking'; btn.disabled = false;
-    show('s-select'); selectedSlot = null; renderSlots(); return;
-  }
+  // DB17 \u2014 atomic SECURITY DEFINER RPC handles: token validation, slot
+  // availability check, booking insert, slot/invitation status flips.
+  // All race-condition-safe at the database level. Replaces the prior
+  // 5-call pattern (2 read checks + insert + 2 status updates) which
+  // required RLS allowing broad anon UPDATEs on slots/invitations.
+  const { data: rpcRows, error: rpcErr } = await sb.rpc('confirm_booking', {
+    p_token:          invitation.token,
+    p_slot_id:        selectedSlot.id,
+    p_customer_name:  name,
+    p_customer_email: email
+  });
 
-  // Re-check invitation hasn't been used (race condition guard)
-  const { data: invCheck } = await sb.from('booking_invitations').select('status').eq('token', invitation.token).single();
-  if (!invCheck || invCheck.status === 'responded') {
-    toast('This invitation has already been used.');
+  if (rpcErr) {
     btn.textContent = 'Confirm Booking'; btn.disabled = false;
-    show('s-error');
-    document.getElementById('err-msg').textContent = 'This invitation has already been used. Please contact your account manager if you need to change your appointment.';
+    const code = (rpcErr.message || '').toLowerCase();
+    if (code.includes('slot_not_available') || code.includes('slot_not_offered')) {
+      toast('Sorry, this slot was just taken. Please go back and choose another time.');
+      show('s-select'); selectedSlot = null; renderSlots(); return;
+    }
+    if (code.includes('invitation_already_used') || code.includes('invitation_expired') || code.includes('invitation_not_found')) {
+      show('s-error');
+      document.getElementById('err-msg').textContent = 'This invitation has already been used or expired. Please contact your account manager if you need to change your appointment.';
+      return;
+    }
+    toast('There was an error confirming your booking. Please try again.');
     return;
   }
 
-  // Create booking (unique constraint on invitation_token prevents duplicates at DB level)
-  const { data: bk, error: bkErr } = await sb.from('appointment_bookings').insert({
-    slot_id:          selectedSlot.id,
-    invitation_token: invitation.token,
-    am_name:          invitation.am_name,
-    am_email:         invitation.am_email,
-    customer_name:    name,
-    customer_email:   email,
-    account_code:     invitation.account_code || null,
-    location:         selectedSlot.location || null,
-    date:             selectedSlot.date,
-    start_time:       selectedSlot.start_time,
-    end_time:         selectedSlot.end_time,
-    notes:            selectedSlot.notes || null,
-    status:           'confirmed'
-  }).select().single();
-
-  if (bkErr) {
+  // RPC returns one row in TABLE form.
+  const rpcRow = (rpcRows && rpcRows[0]) || null;
+  if (!rpcRow) {
     toast('There was an error confirming your booking. Please try again.');
     btn.textContent = 'Confirm Booking'; btn.disabled = false; return;
   }
-
-  // Update slot to booked + invitation to responded
-  await Promise.all([
-    sb.from('appointment_slots').update({ status: 'booked' }).eq('id', selectedSlot.id),
-    sb.from('booking_invitations').update({ status: 'responded' }).eq('token', invitation.token)
-  ]);
+  const bk = {
+    id:             rpcRow.booking_id,
+    am_name:        rpcRow.am_name,
+    am_email:       rpcRow.am_email,
+    customer_name:  rpcRow.customer_name,
+    customer_email: rpcRow.customer_email,
+    date:           rpcRow.date,
+    start_time:     rpcRow.start_time,
+    end_time:       rpcRow.end_time,
+    location:       rpcRow.location
+  };
 
   confirmedBk = bk;
 

@@ -243,11 +243,13 @@ async function showSeasonLanding() {
         .order('created_at', { ascending: false })
   ]);
 
-  // Apparel needs JS-side filtering to the current user (RLS on
-  // draft_orders is open to all authenticated). Footwear is already
-  // filtered by RLS so we render whatever comes back.
+  // DB01 — Once migration_DB01_draft_orders_rls.sql is applied, RLS is the
+  // server-side fence (created_by = auth.uid() OR _dr_is_privileged()). This
+  // JS-side filter is retained as defence-in-depth and to keep behaviour
+  // sensible on legacy rows that have created_by = NULL. Admins/managers see
+  // all drafts; reps see only those whose customer_data.manager matches them.
   const cu = currentUser || {};
-  const isAdminUser = (cu.role === 'admin');
+  const isAdminUser = (cu.role === 'admin' || cu.role === 'manager');
   const myName = (cu.name || '').trim().toLowerCase();
   const visibleApparelDrafts = (apparelDraftsRes.data || []).filter(d => {
     if (isAdminUser) return true;
