@@ -162,7 +162,7 @@
             .select('subsection_id, subsection_name, collection_id, sort_order, status')
             .order('collection_id, sort_order', { ascending: true }),
         supa.from('products')
-            .select('id, sku, base_sku, item_number, name:product_name, sizes:available_sizes, width, exclusive, silo, energy, colour, is_new, is_top_seller, aud_ws_price, aud_rrp_price, nzd_ws_price, nzd_rrp_price, collection_id, subsection_id, delivery_months, status, category')
+            .select('id, sku, base_sku, item_number, name:product_name, sizes:available_sizes, width, exclusive, silo, outsole, energy, colour, is_new, is_top_seller, aud_ws_price, aud_rrp_price, nzd_ws_price, nzd_rrp_price, collection_id, subsection_id, delivery_months, status, category')
             .eq('category', 'footwear')
             .in('status', ['active', 'sold_out'])
             .order('item_number', { ascending: true })

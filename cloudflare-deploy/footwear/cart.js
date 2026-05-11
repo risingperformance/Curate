@@ -1,16 +1,26 @@
 // ─── Cart ──────────────────────────────────────────────────────────────────
 //
 // Cart state lives on window.fwApp.state.cartItems as the brief specifies:
-// an array of { product_id, size, width, quantity, unit_price }. All template
-// modules add to / remove from / inspect the cart through this module's API.
+// an array of cart-line objects. All template modules add to / remove
+// from / inspect the cart through this module's API.
 //
-// unit_price is a snapshot captured at add-to-cart time from the product's
-// wholesale price in the rep's country (aud_ws_price for AUD,
-// nzd_ws_price for NZD). It lets the dashboard compute total order value
-// without joining cart_items back to products. Lines added before this
-// field existed (legacy drafts) omit unit_price; the dashboard treats
-// missing values as 0 and surfaces a "value not tracked" note when any
-// legacy line is included in the total.
+// Cart line shape (May 2026 parity pass):
+//   { product_id, size, width, quantity,
+//     unit_price,   // snapshot of WS price in rep's country
+//     exclusive,    // product attribute, snapshotted
+//     silo,         // product attribute, snapshotted
+//     outsole,      // product attribute, snapshotted
+//     energy }      // product attribute, snapshotted
+//
+// All snapshot fields are captured at add-to-cart time, not at submit,
+// so the order detail reflects what the rep actually showed the
+// customer at point of sale even if the product is later renamed,
+// re-tagged, or deleted.
+//
+// Legacy lines (saved before snapshotting was introduced) omit some
+// or all snapshot fields. The dashboard treats missing unit_price as
+// 0 for value totals and surfaces a "value not tracked" note when
+// any legacy line is included.
 //
 // Cart UX:
 //   - cart.openPicker(product, anchorEl) opens a size + quantity picker
@@ -72,18 +82,27 @@
     return -1;
   }
 
-  // Snapshot the wholesale unit price for a product in the rep's country.
-  // Returns a finite number or null. Called from add() so each newly
-  // appended cart_item carries the price the rep saw at the time of
-  // adding it. priceForCountry is hoisted from later in the same IIFE.
-  function snapshotUnitPrice(productId) {
+  // Snapshot the per-line product data we want to preserve on each
+  // cart_item. Captured at add-to-cart time so the order detail stays
+  // accurate even if the product is later renamed or its attributes
+  // change. Returns nulls when the catalogue isn't loaded yet or the
+  // product is unknown; the caller decides whether to write each
+  // field. priceForCountry is hoisted from later in the same IIFE.
+  function snapshotProductData(productId) {
+    var empty = { unit_price: null, exclusive: null, silo: null, outsole: null, energy: null };
     var cat = window.fwApp && window.fwApp.catalogue;
-    if (!cat || !cat.getProductById) return null;
+    if (!cat || !cat.getProductById) return empty;
     var p = cat.getProductById(productId);
-    if (!p) return null;
+    if (!p) return empty;
     var pricing = priceForCountry(p);
     var n = Number(pricing && pricing.ws);
-    return isFinite(n) ? n : null;
+    return {
+      unit_price: isFinite(n) ? n : null,
+      exclusive:  p.exclusive || null,
+      silo:       p.silo      || null,
+      outsole:    p.outsole   || null,
+      energy:     p.energy    || null
+    };
   }
 
   function getQty(productId, size, width) {
@@ -98,20 +117,28 @@
     var i = findIndex(productId, size, width);
     if (i >= 0) {
       arr[i].quantity = (Number(arr[i].quantity) || 0) + qty;
-      // Backfill unit_price on the existing line if it was added before
-      // price snapshotting was introduced (legacy drafts), so totals
-      // stay accurate once the rep touches an old line again.
-      if (arr[i].unit_price == null) {
-        var snap = snapshotUnitPrice(productId);
-        if (snap != null) arr[i].unit_price = snap;
-      }
+      // Backfill any snapshot field that was missing on an existing
+      // line (legacy drafts saved before snapshotting was wired up).
+      // We only overwrite null/undefined — never the rep's existing
+      // snapshot, in case the underlying product was edited since.
+      var snap = snapshotProductData(productId);
+      if (arr[i].unit_price == null && snap.unit_price != null) arr[i].unit_price = snap.unit_price;
+      if (arr[i].exclusive  == null && snap.exclusive  != null) arr[i].exclusive  = snap.exclusive;
+      if (arr[i].silo       == null && snap.silo       != null) arr[i].silo       = snap.silo;
+      if (arr[i].outsole    == null && snap.outsole    != null) arr[i].outsole    = snap.outsole;
+      if (arr[i].energy     == null && snap.energy     != null) arr[i].energy     = snap.energy;
     } else {
+      var snapNew = snapshotProductData(productId);
       arr.push({
         product_id: productId,
         size: size || null,
         width: width || null,
         quantity: qty,
-        unit_price: snapshotUnitPrice(productId)
+        unit_price: snapNew.unit_price,
+        exclusive:  snapNew.exclusive,
+        silo:       snapNew.silo,
+        outsole:    snapNew.outsole,
+        energy:     snapNew.energy
       });
     }
     schedulePersist();
@@ -131,12 +158,15 @@
     } else {
       arr[i].quantity = qty;
       // Same legacy backfill as add(): if the rep edits the qty of a
-      // line that was saved before unit_price was captured, snapshot
-      // the price now so downstream totals stay accurate.
-      if (arr[i].unit_price == null) {
-        var snap = snapshotUnitPrice(productId);
-        if (snap != null) arr[i].unit_price = snap;
-      }
+      // line that was saved before snapshotting was introduced, fill
+      // in any null snapshot fields so downstream totals and order
+      // detail stay accurate.
+      var snap = snapshotProductData(productId);
+      if (arr[i].unit_price == null && snap.unit_price != null) arr[i].unit_price = snap.unit_price;
+      if (arr[i].exclusive  == null && snap.exclusive  != null) arr[i].exclusive  = snap.exclusive;
+      if (arr[i].silo       == null && snap.silo       != null) arr[i].silo       = snap.silo;
+      if (arr[i].outsole    == null && snap.outsole    != null) arr[i].outsole    = snap.outsole;
+      if (arr[i].energy     == null && snap.energy     != null) arr[i].energy     = snap.energy;
     }
     schedulePersist();
     paintSummary();
@@ -739,12 +769,32 @@
       emailRes = { ok: false, status: 0, body: (e && e.message) || 'Network error' };
     }
 
-    // Mark the draft as submitted regardless of email outcome. The
-    // submission is the source of truth in the DB; the email is a
-    // notification convenience. If the email failed we surface a
-    // non-blocking warning so the rep is aware, but the order still
-    // counts as submitted.
-    var statusRes = await c.persistDraft({ status: 'submitted' });
+    // Mark the draft as submitted regardless of email outcome, and at
+    // the same time populate the parity columns the dashboard needs
+    // (country, customer_group, total_units, total_value, submitted_at).
+    // These were added in the May 2026 parity migration. Writing them
+    // here means the dashboard reads direct columns instead of having
+    // to synthesise totals from cart_items on every page load.
+    var lineItems   = Array.isArray(c.state.cartItems) ? c.state.cartItems : [];
+    var totalUnits  = lineItems.reduce(function (s, it) {
+                        return s + (Number(it.quantity) || 0);
+                      }, 0);
+    var totalValue  = lineItems.reduce(function (s, it) {
+                        var q = Number(it.quantity)   || 0;
+                        var p = Number(it.unit_price) || 0;
+                        return s + q * p;
+                      }, 0);
+    var repCountry  = (c.state.currentUser && c.state.currentUser.country) || null;
+    var custGroup   = (c.state.customer    && c.state.customer.group)      || null;
+
+    var statusRes = await c.persistDraft({
+      status:          'submitted',
+      country:         repCountry,
+      customer_group:  custGroup,
+      total_units:     totalUnits,
+      total_value:     totalValue,
+      submitted_at:    new Date().toISOString()
+    });
     if (statusRes.error) {
       c.toast('Could not mark draft as submitted: ' + (statusRes.error.message || ''), 'error');
       if (btn) { btn.disabled = false; btn.textContent = 'Submit order'; }

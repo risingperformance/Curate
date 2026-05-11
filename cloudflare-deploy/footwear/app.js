@@ -299,8 +299,13 @@
   // pull every column the picker needs.
   async function loadCustomers() {
     if (state.customers) return state.customers;
+    // The customers table has a capital-G "Group" column (CREATE TABLE
+    // quoted it). PostgREST returns it lowercase as 'group' on the row,
+    // but you must request it quoted on the wire. We surface it as
+    // .group on the in-memory record so the submit flow can write it
+    // back onto footwear_drafts.customer_group without re-fetching.
     var res = await supa.from('customers')
-                        .select('account_code, account_name, account_manager, contact_email, state, city, address_1, address_2, postcode, cma_key')
+                        .select('account_code, account_name, account_manager, contact_email, state, city, address_1, address_2, postcode, cma_key, "Group"')
                         .order('account_name', { ascending: true });
     if (res.error) {
       toast('Could not load customers: ' + (res.error.message || ''), 'error');
@@ -315,6 +320,7 @@
         city:            r.city || '',
         state:           r.state || '',
         cma_key:         r.cma_key || r.account_code,
+        group:           r.Group || r.group || '',
         address:         [r.address_1, r.address_2, r.city, r.state, r.postcode]
                           .filter(Boolean).join(', '),
       };

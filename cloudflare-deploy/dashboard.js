@@ -483,8 +483,19 @@ async function loadApparel(loadGen) {
 async function loadFootwear(loadGen) {
   const seasonFilter = currentSeason;
 
+  // After the May 2026 parity migration, footwear_drafts carries
+  // country / customer_group / total_units / total_value / submitted_at
+  // as real columns. Legacy submitted rows leave these NULL; the
+  // synthesis fallback below covers them. The query still orders by
+  // updated_at — for legacy rows submitted_at was backfilled from
+  // updated_at, and for new rows the two are written together, so the
+  // ordering is identical either way.
   let submittedQuery = supa.from('footwear_drafts')
-    .select('id, season_id, status, cart_items, customer_data, created_by, created_at, updated_at')
+    .select(
+      'id, season_id, status, cart_items, customer_data, ' +
+      'country, customer_group, total_units, total_value, submitted_at, ' +
+      'created_by, created_at, updated_at'
+    )
     .eq('status', 'submitted')
     .order('updated_at', { ascending: false });
   if (seasonFilter) submittedQuery = submittedQuery.eq('season_id', seasonFilter);
@@ -507,9 +518,10 @@ async function loadFootwear(loadGen) {
       'account_code, season_id, prebook_units, total_units, total_value'
     ),
     // Footwear loader pulls richer product columns so lines can be
-    // rebuilt from cart_items (the apparel loader can stay minimal
-    // because order_lines already holds product_name / collection_id).
-    supa.from('products').select('id, sku, base_sku, product_name, collection_id'),
+    // rebuilt from cart_items. exclusive / silo / outsole / energy are
+    // also pulled so legacy cart_items (no snapshot fields) can fall
+    // back to the current product attribute instead of showing blanks.
+    supa.from('products').select('id, sku, base_sku, product_name, collection_id, exclusive, silo, outsole, energy'),
     supa.from('salespeople').select('name, country')
   ]);
 
@@ -541,28 +553,48 @@ async function loadFootwear(loadGen) {
     return '';
   }
 
-  // Synthesize allOrders from submitted footwear_drafts. order_id uses
-  // the draft uuid so the existing renderers (which key off order_id)
-  // can join lines to orders without collision risk.
+  // Synthesize allOrders from submitted footwear_drafts. Prefer the
+  // direct header columns (post-parity-migration) when present; fall
+  // back to deriving the same values from cart_items + customer_data
+  // for legacy rows that pre-date the migration. order_id uses the
+  // draft uuid so the existing renderers (which key off order_id) can
+  // join lines to orders without collision risk.
   allOrders = submitted.map(d => {
     const cd    = d.customer_data || {};
     const items = Array.isArray(d.cart_items) ? d.cart_items : [];
-    const total_units = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-    const total_value = items.reduce((s, it) => {
-      const q = Number(it.quantity)   || 0;
-      const p = Number(it.unit_price) || 0;
-      return s + q * p;
-    }, 0);
+
+    const directUnits = d.total_units;
+    const totalUnits  = (directUnits != null) ? Number(directUnits)
+                                              : items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+
+    const directValue = d.total_value;
+    const totalValue  = (directValue != null) ? Number(directValue)
+                                              : items.reduce((s, it) => {
+                                                  const q = Number(it.quantity)   || 0;
+                                                  const p = Number(it.unit_price) || 0;
+                                                  return s + q * p;
+                                                }, 0);
+
+    // Country: direct column wins. salespeople.country stores 'AU'/'NZ';
+    // direct column may already be the rep's country code in either
+    // form (the cart writes state.currentUser.country, which can be
+    // either 'AU'/'NZ' or 'AUD'/'NZD' depending on profile). Normalise
+    // to 'AUD'/'NZD' so renderNationalTargets matches apparel rows.
+    let country = d.country;
+    if (!country) country = countryForRep(cd.account_manager);
+    if (country === 'AU') country = 'AUD';
+    if (country === 'NZ') country = 'NZD';
+
     return {
       order_id:        d.id,
       account_manager: cd.account_manager || '',
       account_name:    cd.account_name    || '',
-      country:         countryForRep(cd.account_manager),
-      order_date:      d.updated_at || d.created_at,
-      total_units:     total_units,
-      total_value:     total_value,
+      country:         country || '',
+      order_date:      d.submitted_at || d.updated_at || d.created_at,
+      total_units:     totalUnits,
+      total_value:     totalValue,
       status:          'submitted',
-      customer_group:  '',
+      customer_group:  d.customer_group || '',
       season_id:       d.season_id
     };
   });
@@ -589,7 +621,16 @@ async function loadFootwear(loadGen) {
         collection_id: p.collection_id || null,
         quantity:      qty,
         unit_price:    pr,
-        line_total:    qty * pr
+        line_total:    qty * pr,
+        // Snapshot fields preserved at add-to-cart time. Fall back to
+        // the live product attribute when the cart_item predates the
+        // snapshot work (legacy drafts).
+        size:          it.size      || null,
+        width:         it.width     || null,
+        exclusive:     it.exclusive || p.exclusive || null,
+        silo:          it.silo      || p.silo      || null,
+        outsole:       it.outsole   || p.outsole   || null,
+        energy:        it.energy    || p.energy    || null
       });
     });
   });
