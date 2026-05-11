@@ -155,23 +155,37 @@ async function loadAll() {
   // do not ship to the client. Add fields here as the dashboard needs them.
   const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes, seasonsRes] = await Promise.all([
     supa.from('orders').select(
-      'order_id, account_name, account_code, account_manager, country, order_date, status, created_at'
+      // Identity + meta
+      'order_id, account_name, account_code, account_manager, country, ' +
+      // Lifecycle
+      'status, order_date, created_at, ' +
+      // Totals + grouping used by the leaderboard, national-target bars,
+      // top-products thumbnails, and season-scoping filter.
+      'total_units, total_value, customer_group, season_id'
     ).order('order_date', { ascending: false }),
     supa.from('order_lines').select(
-      'id, order_id, sku, size, qty, unit_price, line_total, category, delivery_month'
+      // line_total and quantity drive top-products + customer aggregates;
+      // product_name + collection_id surface in the top-products table.
+      'id, order_id, sku, product_name, quantity, unit_price, line_total, collection_id'
     ),
     // Apparel-only here. After AW27 footwear launches the dashboard will
     // need to surface footwear targets too; until then keep current
     // behaviour by filtering on category.
     supa.from('sales_targets').select('name, season, category, target').eq('category', 'apparel'),
-    supa.from('customers').select(
-      'account_code, account_name, contact_first, contact_last, contact_email, country, manager_user_id'
-    ),
+    // Customers: select('*') retained intentionally — the customer_group
+    // filter relies on whatever the column happens to be named in the
+    // current schema (the code is defensive against Group vs group). Until
+    // schema is canonicalised, * is safer than enumerating an unknown
+    // case. PII columns (contact_*) are still rendered through escapeHtml
+    // / escapeAttr at the call sites.
+    supa.from('customers').select('*'),
     supa.from('draft_orders').select(
       'token, customer_data, order_data, created_at, expires_at'
     ).order('created_at', { ascending: false }),
     supa.from('customer_season_history').select(
-      'account_code, account_name, season, total_units, total_value'
+      // season_id used for prior-season filter; prebook_units for the
+      // year-over-year diff column on the leaderboard.
+      'account_code, account_name, season, season_id, total_units, total_value, prebook_units'
     ),
     supa.from('products').select('sku, base_sku'),
     supa.from('salespeople').select('name, country'),
