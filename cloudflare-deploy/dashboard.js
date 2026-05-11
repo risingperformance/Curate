@@ -1,6 +1,18 @@
 const SUPA_URL = window.__SUPABASE_CONFIG.url;
 const SUPA_KEY = window.__SUPABASE_CONFIG.key;
 const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// Hide login screen immediately if a session token exists in localStorage.
+// This prevents the login screen flashing before the async getSession resolves.
+(function() {
+  try {
+    var stored = localStorage.getItem('sb-' + new URL(SUPA_URL).hostname.split('.')[0] + '-auth-token');
+    if (stored) {
+      var ls = document.getElementById('login-screen');
+      if (ls) ls.style.display = 'none';
+    }
+  } catch(e) { /* ignore */ }
+})();
 // PIN-based login removed Apr 2026 -- now using Supabase Auth (email/password)
 const SUPA_IMG_BASE = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/product-images/FJ_';
 
@@ -65,8 +77,14 @@ async function handleSignOut() {
 
 function unlockDashboard() {
   const screen = document.getElementById('login-screen');
+  // If already hidden by early check, just load data immediately.
+  if (screen.style.display === 'none') {
+    applyRoleVisibility();
+    loadAll();
+    return;
+  }
   screen.classList.add('unlocked');
-  // AUTH20 — reveal Edit Targets only for admin / manager (still RLS-gated server-side).
+  // AUTH20 - reveal Edit Targets only for admin / manager (still RLS-gated server-side).
   applyRoleVisibility();
   setTimeout(() => { screen.style.display = 'none'; loadAll(); }, 500);
 }

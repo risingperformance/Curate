@@ -320,7 +320,13 @@ function switchTab(name, btn) {
     if (el) el.style.display = (t === name) ? 'block' : 'none';
   });
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+
+  // Update hamburger menu dots
+  ['calendar','slots','bookings'].forEach(t => {
+    var dot = document.getElementById('fj-tab-' + t + '-dot');
+    if (dot) dot.innerHTML = (t === name) ? '&#9679;' : '&#9675;';
+  });
 
   // (Calendar nav buttons now live inside the calendar card itself,
   // so they hide/show automatically with the tab.)
@@ -1853,10 +1859,25 @@ if (sbNewSlot) sbNewSlot.addEventListener('click', () => openCreateSlot(null));
 const slotsNewBtn = document.getElementById('slots-new-btn');
 if (slotsNewBtn) slotsNewBtn.addEventListener('click', () => openCreateSlot(null));
 
-// Tab buttons
+// Tab buttons (subbar)
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', function() {
     switchTab(this.dataset.tab, this);
+  });
+});
+
+// Tab items in hamburger menu
+document.querySelectorAll('#fj-menu [data-tab]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    var tab = this.dataset.tab;
+    // Find matching subbar tab-btn if it exists, otherwise pass null
+    var subbarBtn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+    switchTab(tab, subbarBtn);
+    // Close the menu
+    var menu = document.getElementById('fj-menu');
+    var menuBtn = document.getElementById('fj-menu-btn');
+    if (menu) menu.hidden = true;
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
   });
 });
 

@@ -777,6 +777,12 @@ textarea { resize: vertical; min-height: 68px; }
 }
 .fj-topbar-logo { display: flex; align-items: center; }
 .fj-topbar-logo-img { height: 36px; width: auto; display: block; }
+.fj-topbar-center {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 3px;
+  color: rgba(255,255,255,0.85); text-transform: uppercase;
+}
 .fj-topbar-right { display: flex; align-items: center; gap: 14px; }
 .fj-curate-mark { display: flex; align-items: center; opacity: 0.85; }
 .fj-curate-mark img { height: 22px; width: auto; display: block; }
@@ -1240,6 +1246,7 @@ textarea { resize: vertical; min-height: 68px; }
         <div class="fj-topbar-logo">
           <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_W.jpg" alt="FootJoy" class="fj-topbar-logo-img">
         </div>
+        <div class="fj-topbar-center">APPOINTMENT DIARY</div>
         <div class="fj-topbar-right">
           <span class="fj-curate-mark" aria-hidden="true">
             <img src="https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-w.png" alt="FJ Curate">
@@ -1267,6 +1274,20 @@ textarea { resize: vertical; min-height: 68px; }
           <span class="fj-menu-icon">&larr;</span><span>Back to Home</span>
         </button>
         <div class="fj-menu-sep"></div>
+        <div class="fj-menu-section">View</div>
+        <button class="fj-menu-item" id="fj-tab-calendar-btn" role="menuitemradio" type="button" data-tab="calendar">
+          <span class="fj-menu-icon fj-menu-icon-dot" id="fj-tab-calendar-dot">&#9679;</span>
+          <span>Calendar</span>
+        </button>
+        <button class="fj-menu-item" id="fj-tab-slots-btn" role="menuitemradio" type="button" data-tab="slots">
+          <span class="fj-menu-icon fj-menu-icon-dot" id="fj-tab-slots-dot">&#9675;</span>
+          <span>Manage Slots</span>
+        </button>
+        <button class="fj-menu-item" id="fj-tab-bookings-btn" role="menuitemradio" type="button" data-tab="bookings">
+          <span class="fj-menu-icon fj-menu-icon-dot" id="fj-tab-bookings-dot">&#9675;</span>
+          <span>Bookings</span>
+        </button>
+        <div class="fj-menu-sep"></div>
         <div class="fj-menu-section">Calendar view</div>
         <button class="fj-menu-item" id="fj-week-5-btn" role="menuitemradio" type="button">
           <span class="fj-menu-icon fj-menu-icon-dot" id="fj-week-5-dot">&#9679;</span>
@@ -1283,21 +1304,8 @@ textarea { resize: vertical; min-height: 68px; }
       </div>
     </header>
 
-    <!-- ── PAGE SUB-BAR (page title + tabs + new slot) ── -->
-    <div class="page-subbar">
-      <div class="page-titles">
-        <div class="page-title" id="topbar-title">Calendar</div>
-        <div class="page-sub">Appointment Diary</div>
-      </div>
-      <div class="page-actions">
-        <div class="tab-group">
-          <button class="tab-btn active" data-tab="calendar">Calendar</button>
-          <button class="tab-btn" data-tab="slots">Manage Slots</button>
-          <button class="tab-btn" data-tab="bookings">Bookings</button>
-        </div>
-        <button class="btn-new-slot-pill" id="header-new-slot-btn" type="button">+ New Slot</button>
-      </div>
-    </div>
+    <!-- Hidden: topbar-title is updated by switchTab for legacy compat -->
+    <span id="topbar-title" style="display:none">Calendar</span>
 
     <!-- Hidden anchors so legacy code that writes to sidebar elements
          (renderSidebarMetrics, renderSidebarBookings) doesn't throw. -->
