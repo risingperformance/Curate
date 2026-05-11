@@ -150,42 +150,41 @@ function showTab(id) {
 async function loadAll() {
   document.getElementById('last-updated').textContent = 'Refreshing…';
 
-  // DB05/DB06 — explicit column lists (no select '*') so legacy / future
-  // sensitive columns (e.g. orders.pin until the ALTER DROP COLUMN runs)
-  // do not ship to the client. Add fields here as the dashboard needs them.
+  // DB06 — explicit select lists driven by the real schema (verified May
+  // 2026 via information_schema). Customer-facing PII columns continue
+  // to flow through escapeHtml / escapeAttr at every render site.
   const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes, seasonsRes] = await Promise.all([
+    // orders columns (per CREATE TABLE):
+    //   order_id, account_manager, account_name, country, order_date,
+    //   total_units, total_value, status, customer_group, season_id, user_id
     supa.from('orders').select(
-      // Identity + meta
-      'order_id, account_name, account_code, account_manager, country, ' +
-      // Lifecycle
-      'status, order_date, created_at, ' +
-      // Totals + grouping used by the leaderboard, national-target bars,
-      // top-products thumbnails, and season-scoping filter.
-      'total_units, total_value, customer_group, season_id'
+      'order_id, account_manager, account_name, country, order_date, ' +
+      'total_units, total_value, status, customer_group, season_id'
     ).order('order_date', { ascending: false }),
+    // order_lines columns: id, order_id, line_number, sku, product_name,
+    //   collection_id, subsection_id, quantity, unit_price, line_total,
+    //   size_breakdown, status, product_id, cresting_*, user_id.
     supa.from('order_lines').select(
-      // line_total and quantity drive top-products + customer aggregates;
-      // product_name + collection_id surface in the top-products table.
-      'id, order_id, sku, product_name, quantity, unit_price, line_total, collection_id'
+      'id, order_id, sku, product_name, collection_id, quantity, unit_price, line_total'
     ),
     // Apparel-only here. After AW27 footwear launches the dashboard will
     // need to surface footwear targets too; until then keep current
     // behaviour by filtering on category.
     supa.from('sales_targets').select('name, season, category, target').eq('category', 'apparel'),
-    // Customers: select('*') retained intentionally — the customer_group
-    // filter relies on whatever the column happens to be named in the
-    // current schema (the code is defensive against Group vs group). Until
-    // schema is canonicalised, * is safer than enumerating an unknown
-    // case. PII columns (contact_*) are still rendered through escapeHtml
-    // / escapeAttr at the call sites.
+    // customers: keep select('*') for now. The leaderboard relies on
+    // "Group" (capital G in the CREATE TABLE — PostgREST returns it
+    // lowercase as 'group'). All other returned columns are admin- or
+    // rep-relevant and are render-escaped at the call sites.
     supa.from('customers').select('*'),
     supa.from('draft_orders').select(
       'token, customer_data, order_data, created_at, expires_at'
     ).order('created_at', { ascending: false }),
+    // customer_season_history columns: id, account_code, season_id,
+    //   prebook_units, refill_units, total_units, mens_units,
+    //   womens_units, junior_units, accessories_units, total_value,
+    //   created_at. (No account_name; no plain "season" column.)
     supa.from('customer_season_history').select(
-      // season_id used for prior-season filter; prebook_units for the
-      // year-over-year diff column on the leaderboard.
-      'account_code, account_name, season, season_id, total_units, total_value, prebook_units'
+      'account_code, season_id, prebook_units, total_units, total_value'
     ),
     supa.from('products').select('sku, base_sku'),
     supa.from('salespeople').select('name, country'),
