@@ -490,14 +490,14 @@ async function fetchNextAppointments(n) {
   // tightens the cross-rep PII bound on the home dashboard.
   const today = new Date().toISOString().slice(0, 10);
   const u = currentUser || {};
-  const isPrivileged = u.role === 'admin' || u.role === 'manager';
+  const isAdmin = u.role === 'admin';
   let q = supa.from('appointment_bookings')
     .select('id, date, start_time, end_time, customer_name, am_name, location')
     .gte('date', today)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
     .limit(n);
-  if (!isPrivileged && u.name) q = q.eq('am_name', u.name);
+  if (!isAdmin && u.name) q = q.eq('am_name', u.name);
   const res = await q;
   return res.data || [];
 }
