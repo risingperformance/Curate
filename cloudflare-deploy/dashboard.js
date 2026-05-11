@@ -26,6 +26,53 @@ let baseSkuMap   = {};  // sku -> base_sku for image lookups
 let openSeasonIds = new Set();  // active seasons -> Top Products filter
 let includePrebook = false;
 
+// ── PRODUCT TYPE + SEASON STATE ─────────────────────────────────────────────
+// productType drives which data the view tabs render. Apparel pulls from
+// the orders/order_lines tables; Footwear (wired in Phase 3) pulls from
+// footwear_drafts. The active season filters all data queries; each
+// product type remembers its last-viewed season independently. State is
+// persisted in localStorage so a refresh restores the rep's choice.
+//
+// Convention for splitting seasons by product type: any season_id that
+// ends with '-shoe' is a footwear season; everything else is apparel.
+// This matches the migration note in index-app.js (May 2026 backfill set
+// older footwear_drafts to 'AW27-shoe').
+let productType = 'apparel'; // 'apparel' | 'footwear'
+let currentSeason = null;     // active season_id for the active type
+let seasonsByType = { apparel: [], footwear: [] }; // populated from the seasons table
+const LS_PRODUCT_KEY = 'dashboard.productType';
+const LS_SEASON_KEY = function (type) { return 'dashboard.season.' + type; };
+
+function isFootwearSeason(id) { return typeof id === 'string' && /-shoe$/i.test(id); }
+
+// Restore the rep's last product-type pick from localStorage so the
+// first loadAll reads the right state. Season picks are restored
+// per-type later, inside resolveActiveSeason(), once the seasons list
+// has been pulled from the DB.
+try {
+  const _storedType = localStorage.getItem(LS_PRODUCT_KEY);
+  if (_storedType === 'apparel' || _storedType === 'footwear') productType = _storedType;
+} catch (e) { /* ignore */ }
+
+// Sort season_ids newest first. AW28 > SS28 > AW27 > SS27 etc. We pull a
+// 2-digit trailing number; ties on number favour AW over SS (AW is later
+// in the calendar year for golf prebook). Anything we can't parse sorts
+// to the end.
+function compareSeasons(a, b) {
+  function parts(id) {
+    var clean = String(id || '').replace(/-shoe$/i, '');
+    var m = clean.match(/^([A-Za-z]+)(\d+)$/);
+    if (!m) return { prefix: 'zz', year: -1 };
+    return { prefix: m[1].toUpperCase(), year: parseInt(m[2], 10) };
+  }
+  var A = parts(a), B = parts(b);
+  if (A.year !== B.year) return B.year - A.year;
+  if (A.prefix === B.prefix) return 0;
+  if (A.prefix === 'AW') return -1;
+  if (B.prefix === 'AW') return 1;
+  return A.prefix.localeCompare(B.prefix);
+}
+
 // AUTH12 — currentUser is module-scoped (was on window). Reduces XSS exfil
 // surface and prevents client-side role tampering via DevTools.
 let currentUser = null;
@@ -147,30 +194,183 @@ function showTab(id) {
 }
 
 // ── LOAD DATA ────────────────────────────────────────────────────────────────
-async function loadAll() {
-  document.getElementById('last-updated').textContent = 'Refreshing…';
+// loadAll routes to the right loader based on productType. The season
+// dropdown is rebuilt on every load from the seasons table so admins
+// who add/remove seasons see them appear without a code change.
+//
+// loadGeneration guards against fast tab/season switches: a stale
+// in-flight loader that resolves after a fresher one has started would
+// otherwise overwrite the global allOrders/allLines with the wrong data.
+// Each loader checks its captured generation against the global at
+// the points where it would mutate state and bails out if newer work
+// is already in flight.
+let loadGeneration = 0;
 
+async function loadAll() {
+  const myGen = ++loadGeneration;
+  document.getElementById('last-updated').textContent = 'Refreshing…';
+  resetKpisForSwitch();
+  await refreshSeasonsList();
+  if (myGen !== loadGeneration) return;
+  resolveActiveSeason();
+  updateSeasonDropdown();
+  updateProductChromeForType();
+  if (productType === 'footwear') {
+    await loadFootwear(myGen);
+    return;
+  }
+  await loadApparel(myGen);
+}
+
+// Blank the KPI tiles so a rapid tab switch doesn't show stale numbers
+// while the new loader runs. The renderers will repopulate them.
+function resetKpisForSwitch() {
+  ['stat-accounts','stat-units','stat-value','stat-orders'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+  const nv = document.getElementById('stat-value-note');
+  if (nv) nv.style.display = 'none';
+}
+
+// Pull the full seasons list and bucket by apparel / footwear by the
+// '-shoe' suffix convention. Results live on seasonsByType.
+async function refreshSeasonsList() {
+  const res = await supa.from('seasons').select('season_id, status');
+  const rows = res.data || [];
+  const apparel = [], footwear = [];
+  rows.forEach(r => {
+    if (!r.season_id) return;
+    if (isFootwearSeason(r.season_id)) footwear.push(r.season_id);
+    else apparel.push(r.season_id);
+  });
+  apparel.sort(compareSeasons);
+  footwear.sort(compareSeasons);
+  seasonsByType = { apparel: apparel, footwear: footwear };
+  // Active seasons still drive the Top Products "this season" filter.
+  openSeasonIds = new Set(rows.filter(r => r.status === 'active').map(r => r.season_id));
+}
+
+// Decide which season is active for the current productType. Order of
+// preference: explicit user pick in localStorage, then the most recent
+// season for that product type, else null (no seasons configured).
+function resolveActiveSeason() {
+  const list = seasonsByType[productType] || [];
+  if (!list.length) { currentSeason = null; return; }
+  let stored = null;
+  try { stored = localStorage.getItem(LS_SEASON_KEY(productType)); } catch (e) { /* ignore */ }
+  if (stored && list.indexOf(stored) >= 0) { currentSeason = stored; return; }
+  currentSeason = list[0]; // already sorted newest-first
+}
+
+// Refresh the dropdown's <option>s for the active product type. Keeps
+// the rep's selection in sync with the underlying state.
+function updateSeasonDropdown() {
+  const sel = document.getElementById('season-select');
+  if (!sel) return;
+  const list = seasonsByType[productType] || [];
+  if (!list.length) {
+    sel.innerHTML = '<option value="">No seasons</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = list.map(id =>
+    '<option value="' + escapeAttr(id) + '"' + (id === currentSeason ? ' selected' : '') + '>' + escapeHtml(id) + '</option>'
+  ).join('');
+}
+
+// Tracks whether the active footwear data set includes any lines saved
+// before the unit_price snapshot was added (Phase 1). When true, the
+// Value KPI tile shows a small note explaining that legacy drafts are
+// excluded from the dollar total. Reset by loadFootwear on each call.
+let footwearHasLegacyLines = false;
+
+// Reflect the active product type in the pill UI. The view tabs and
+// panels are shared between Apparel and Footwear; the active loader is
+// what differs. The Phase-2 placeholder card stays hidden under either
+// product type now that the footwear loader is wired (Phase 3+).
+function updateProductChromeForType() {
+  document.querySelectorAll('.product-pill').forEach(btn => {
+    const isActive = btn.dataset.product === productType;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  const ph = document.getElementById('footwear-placeholder');
+  if (ph) ph.hidden = true;
+  updateLabelsForProductType();
+}
+
+// Swap copy across the page to match the active product type. Targets
+// already compare to units everywhere (so the leaderboard/national
+// progress logic doesn't need to branch), but the surfaced labels
+// ("Pairs" vs "Units") and the legacy-drafts note need to follow the
+// active type.
+function updateLabelsForProductType() {
+  const isFootwear = productType === 'footwear';
+  const unitsWord  = isFootwear ? 'Pairs' : 'Units';
+
+  const unitsLabelEl = document.getElementById('stat-units-label');
+  if (unitsLabelEl) unitsLabelEl.textContent = 'Total ' + unitsWord;
+
+  const valueLabelEl = document.getElementById('stat-value-label');
+  if (valueLabelEl) valueLabelEl.textContent = 'Total Value';
+
+  const valueNoteEl = document.getElementById('stat-value-note');
+  if (valueNoteEl) {
+    valueNoteEl.style.display = (isFootwear && footwearHasLegacyLines) ? '' : 'none';
+  }
+
+  // Table headers that use the units/pairs vocabulary swap together.
+  const lbHdr = document.getElementById('leaderboard-units-header');
+  if (lbHdr) lbHdr.textContent = unitsWord;
+  const ordersHdr = document.getElementById('orders-units-header');
+  if (ordersHdr) {
+    // Preserve the sort icon child element rather than blowing it away.
+    ordersHdr.firstChild.nodeValue = unitsWord;
+  }
+  const draftsHdr = document.getElementById('drafts-units-header');
+  if (draftsHdr) draftsHdr.textContent = unitsWord;
+
+  // Page <title>: include the active season + product so external
+  // bookmarks read sensibly.
+  if (currentSeason) {
+    const productWord = isFootwear ? 'Footwear' : 'Apparel';
+    document.title = 'FootJoy — ' + productWord + ' Dashboard ' + currentSeason;
+  }
+}
+
+// Apparel-side loader. Pulled out of loadAll so the footwear loader can
+// live as a sibling in Phase 3 without touching this code path. The
+// loadGen argument lets a stale loader bail before it overwrites the
+// global state with data the rep has already moved on from.
+async function loadApparel(loadGen) {
   // DB06 — explicit select lists driven by the real schema (verified May
   // 2026 via information_schema). Customer-facing PII columns continue
   // to flow through escapeHtml / escapeAttr at every render site.
-  const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes, seasonsRes] = await Promise.all([
-    // orders columns (per CREATE TABLE):
-    //   order_id, account_manager, account_name, country, order_date,
-    //   total_units, total_value, status, customer_group, season_id, user_id
-    supa.from('orders').select(
-      'order_id, account_manager, account_name, country, order_date, ' +
-      'total_units, total_value, status, customer_group, season_id'
-    ).order('order_date', { ascending: false }),
+  // Season filter: orders and sales_targets are constrained to the
+  // active season picked in the dropdown. Falls back to no-filter only
+  // if no season is set (empty seasons table).
+  const seasonFilter = currentSeason;
+
+  let ordersQuery = supa.from('orders').select(
+    'order_id, account_manager, account_name, country, order_date, ' +
+    'total_units, total_value, status, customer_group, season_id'
+  ).order('order_date', { ascending: false });
+  if (seasonFilter) ordersQuery = ordersQuery.eq('season_id', seasonFilter);
+
+  let targetsQuery = supa.from('sales_targets').select('name, season, category, target').eq('category', 'apparel');
+  if (seasonFilter) targetsQuery = targetsQuery.eq('season', seasonFilter);
+
+  const [ordersRes, linesRes, targetsRes, customersRes, draftsRes, historyRes, productsRes, salespeopleRes] = await Promise.all([
+    ordersQuery,
     // order_lines columns: id, order_id, line_number, sku, product_name,
     //   collection_id, subsection_id, quantity, unit_price, line_total,
     //   size_breakdown, status, product_id, cresting_*, user_id.
     supa.from('order_lines').select(
       'id, order_id, sku, product_name, collection_id, quantity, unit_price, line_total'
     ),
-    // Apparel-only here. After AW27 footwear launches the dashboard will
-    // need to surface footwear targets too; until then keep current
-    // behaviour by filtering on category.
-    supa.from('sales_targets').select('name, season, category, target').eq('category', 'apparel'),
+    targetsQuery,
     // customers: keep select('*') for now. The leaderboard relies on
     // "Group" (capital G in the CREATE TABLE — PostgREST returns it
     // lowercase as 'group'). All other returned columns are admin- or
@@ -187,9 +387,12 @@ async function loadAll() {
       'account_code, season_id, prebook_units, total_units, total_value'
     ),
     supa.from('products').select('sku, base_sku'),
-    supa.from('salespeople').select('name, country'),
-    supa.from('seasons').select('season_id, status').eq('status', 'active')
+    supa.from('salespeople').select('name, country')
   ]);
+
+  // Race guard: bail if a newer loadAll has started since this one
+  // dispatched its Promise.all.
+  if (typeof loadGen === 'number' && loadGen !== loadGeneration) return;
 
   allOrders    = ordersRes.data  || [];
   allLines     = linesRes.data   || [];
@@ -197,11 +400,6 @@ async function loadAll() {
 
   baseSkuMap = {};
   (productsRes.data || []).forEach(p => { if (p.base_sku) baseSkuMap[p.sku] = p.base_sku; });
-
-  // Open seasons -> filter the Top Products panel to "this season" only.
-  // If the seasons table is empty (legacy install), the panel falls back
-  // to all-time across every order.
-  openSeasonIds = new Set((seasonsRes.data || []).map(s => s.season_id));
 
   allCustomers = {};
 
@@ -223,11 +421,13 @@ async function loadAll() {
     }
   });
 
-  // Build history lookup: account_code → same season type from prior year
-  // e.g. current AW27 compares to AW26 (not SS26)
-  const currentDashSeason = 'AW27';
+  // Build history lookup: account_code → same season-prefix from prior
+  // year. AW27 compares to AW26 (not SS26). Falls back to 'AW27' if no
+  // season is set, preserving the previous hardcoded behaviour.
+  const currentDashSeason = currentSeason || 'AW27';
   const seasonPrefix = currentDashSeason.replace(/\d+$/, ''); // 'AW'
-  const seasonYear = parseInt(currentDashSeason.replace(/^\D+/, '')); // 27
+  const seasonYearMatch = currentDashSeason.match(/(\d+)$/);
+  const seasonYear = seasonYearMatch ? parseInt(seasonYearMatch[1], 10) : 27;
   const priorSeasonId = seasonPrefix + (seasonYear - 1); // 'AW26'
 
   const historyByAccount = {};
@@ -265,6 +465,211 @@ async function loadAll() {
   renderDrafts();
   populateFilters();
   populateTargetInputs();
+  updateLabelsForProductType();
+}
+
+// ── FOOTWEAR LOADER ─────────────────────────────────────────────────────────
+// Sibling of loadApparel. The footwear order model differs from apparel
+// (orders + order_lines) in that submitted orders live as
+// footwear_drafts rows with a `cart_items` JSON column. We synthesize
+// allOrders / allLines in the apparel shape so the existing renderers
+// can be reused as-is. Targets and customer_season_history are pulled
+// the same way, just with the appropriate filters.
+//
+// Country resolution: footwear_drafts has no country column. We map the
+// draft's account_manager (rep name) through the salespeople table to
+// pick up AU/NZ, then convert to AUD/NZD to match the apparel
+// convention used by renderNationalTargets and the orders table.
+async function loadFootwear(loadGen) {
+  const seasonFilter = currentSeason;
+
+  let submittedQuery = supa.from('footwear_drafts')
+    .select('id, season_id, status, cart_items, customer_data, created_by, created_at, updated_at')
+    .eq('status', 'submitted')
+    .order('updated_at', { ascending: false });
+  if (seasonFilter) submittedQuery = submittedQuery.eq('season_id', seasonFilter);
+
+  let draftsListQuery = supa.from('footwear_drafts')
+    .select('id, share_token, season_id, cart_items, customer_data, created_at')
+    .eq('status', 'draft')
+    .order('created_at', { ascending: false });
+  if (seasonFilter) draftsListQuery = draftsListQuery.eq('season_id', seasonFilter);
+
+  let targetsQuery = supa.from('sales_targets').select('name, season, category, target').eq('category', 'footwear');
+  if (seasonFilter) targetsQuery = targetsQuery.eq('season', seasonFilter);
+
+  const [submittedRes, draftsListRes, targetsRes, customersRes, historyRes, productsRes, salespeopleRes] = await Promise.all([
+    submittedQuery,
+    draftsListQuery,
+    targetsQuery,
+    supa.from('customers').select('*'),
+    supa.from('customer_season_history').select(
+      'account_code, season_id, prebook_units, total_units, total_value'
+    ),
+    // Footwear loader pulls richer product columns so lines can be
+    // rebuilt from cart_items (the apparel loader can stay minimal
+    // because order_lines already holds product_name / collection_id).
+    supa.from('products').select('id, sku, base_sku, product_name, collection_id'),
+    supa.from('salespeople').select('name, country')
+  ]);
+
+  // Race guard mirrors loadApparel: if a fresher loadAll has started
+  // while we were waiting on the network, drop this run.
+  if (typeof loadGen === 'number' && loadGen !== loadGeneration) return;
+
+  const submitted = submittedRes.data || [];
+  const products  = productsRes.data  || [];
+
+  // Product lookups
+  const productById = {};
+  products.forEach(p => { if (p.id) productById[p.id] = p; });
+
+  baseSkuMap = {};
+  products.forEach(p => { if (p.base_sku && p.sku) baseSkuMap[p.sku] = p.base_sku; });
+
+  // Salesperson -> country (AU/NZ). Mapped to currency code (AUD/NZD)
+  // when synthesizing the order rows so renderNationalTargets and the
+  // orders-table country filter work without changes.
+  const salespersonCountry = {};
+  (salespeopleRes.data || []).forEach(s => {
+    if (s.name) salespersonCountry[s.name] = (s.country || '').toUpperCase();
+  });
+  function countryForRep(name) {
+    const c = salespersonCountry[name] || '';
+    if (c === 'AU') return 'AUD';
+    if (c === 'NZ') return 'NZD';
+    return '';
+  }
+
+  // Synthesize allOrders from submitted footwear_drafts. order_id uses
+  // the draft uuid so the existing renderers (which key off order_id)
+  // can join lines to orders without collision risk.
+  allOrders = submitted.map(d => {
+    const cd    = d.customer_data || {};
+    const items = Array.isArray(d.cart_items) ? d.cart_items : [];
+    const total_units = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    const total_value = items.reduce((s, it) => {
+      const q = Number(it.quantity)   || 0;
+      const p = Number(it.unit_price) || 0;
+      return s + q * p;
+    }, 0);
+    return {
+      order_id:        d.id,
+      account_manager: cd.account_manager || '',
+      account_name:    cd.account_name    || '',
+      country:         countryForRep(cd.account_manager),
+      order_date:      d.updated_at || d.created_at,
+      total_units:     total_units,
+      total_value:     total_value,
+      status:          'submitted',
+      customer_group:  '',
+      season_id:       d.season_id
+    };
+  });
+
+  // Synthesize allLines from the cart_items JSON. line_total = qty *
+  // unit_price; missing unit_price (legacy drafts pre-Phase-1) treated
+  // as zero, and we flag the data set so the Value KPI can surface a
+  // small note that legacy lines are excluded from the dollar total.
+  allLines = [];
+  footwearHasLegacyLines = false;
+  submitted.forEach(d => {
+    const items = Array.isArray(d.cart_items) ? d.cart_items : [];
+    items.forEach((it, idx) => {
+      const p   = productById[it.product_id] || {};
+      const qty = Number(it.quantity)   || 0;
+      const hasPrice = it.unit_price != null && isFinite(Number(it.unit_price));
+      const pr  = hasPrice ? Number(it.unit_price) : 0;
+      if (!hasPrice && qty > 0) footwearHasLegacyLines = true;
+      allLines.push({
+        id:            d.id + ':' + idx,
+        order_id:      d.id,
+        sku:           p.sku          || '',
+        product_name:  p.product_name || '',
+        collection_id: p.collection_id || null,
+        quantity:      qty,
+        unit_price:    pr,
+        line_total:    qty * pr
+      });
+    });
+  });
+
+  // Synthesize the draft list for the Drafts tab. Shape mirrors apparel
+  // draft_orders so renderDrafts can iterate without branching. The
+  // _productType tag lets renderDrafts route the Open link to the
+  // right form and pull units from cart_items rather than the apparel
+  // order_data shape.
+  allDrafts = (draftsListRes.data || []).map(d => {
+    const items = Array.isArray(d.cart_items) ? d.cart_items : [];
+    const totalUnits = items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    return {
+      token:         d.share_token,
+      customer_data: d.customer_data || {},
+      order_data:    { totalUnits: totalUnits },
+      created_at:    d.created_at,
+      expires_at:    null,
+      _productType:  'footwear',
+      _totalUnits:   totalUnits
+    };
+  });
+
+  // Build targets + national totals using the same rules as apparel.
+  // Footwear targets are stored in units (pairs) per admin convention,
+  // matching the existing renderer's units-based comparison.
+  targets = {};
+  nationalTargets = { AU: 0, NZ: 0 };
+  (targetsRes.data || []).forEach(b => {
+    if (b.target == null) return;
+    targets[b.name] = b.target;
+    const country = salespersonCountry[b.name] || '';
+    if (country === 'AU') nationalTargets.AU += (b.target || 0);
+    if (country === 'NZ') nationalTargets.NZ += (b.target || 0);
+  });
+
+  // Customer history: prior-season comparison. Strip the '-shoe' suffix
+  // before computing the prior year so AW27-shoe compares to AW26-shoe.
+  const cleanSeason   = (currentSeason || 'AW27-shoe').replace(/-shoe$/i, '');
+  const seasonPrefix  = cleanSeason.replace(/\d+$/, '');
+  const yearMatch     = cleanSeason.match(/(\d+)$/);
+  const seasonYear    = yearMatch ? parseInt(yearMatch[1], 10) : 27;
+  const priorSeasonId = seasonPrefix + (seasonYear - 1) + '-shoe';
+
+  const historyByAccount = {};
+  (historyRes.data || []).forEach(h => {
+    if (h.season_id !== priorSeasonId) return;
+    historyByAccount[h.account_code] = h;
+  });
+
+  allCustomers = {};
+  (customersRes.data || []).forEach(c => {
+    const key  = (c.account_name || '').toLowerCase();
+    const hist = historyByAccount[c.account_code] || {};
+    allCustomers[key] = {
+      account_name:        c.account_name || '',
+      account_manager:     c.account_manager || '',
+      cma_key:             c.cma_key || '',
+      previous_total_units: hist.total_units || 0,
+      previous_prebook:     hist.prebook_units || 0,
+      group:                c.Group || c.group || ''
+    };
+  });
+
+  // order_id -> order lookup (used by line-level expand views)
+  window._orderLookup = {};
+  allOrders.forEach(o => { window._orderLookup[o.order_id] = o; });
+
+  const t = new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('last-updated').textContent = 'Updated ' + t;
+
+  renderNationalTargets();
+  renderSummaryStats();
+  renderLeaderboard();
+  renderTopProducts();
+  renderOrders();
+  renderDrafts();
+  populateFilters();
+  populateTargetInputs();
+  updateLabelsForProductType();
 }
 
 // ── SUMMARY STATS ────────────────────────────────────────────────────────────
@@ -989,13 +1394,19 @@ function renderDrafts() {
     const accountName  = cd.customer || cd.account_name || '—';
     const managerName  = cd.manager || cd.account_manager || '—';
 
-    // Calculate units from order_data snapshot
-    const od = d.order_data || {};
+    // Units source depends on the draft's product type. Apparel drafts
+    // store order_data keyed by SKU with a sizes map; footwear drafts
+    // (synthesized in loadFootwear) expose _totalUnits directly.
     let units = 0;
-    Object.values(od).forEach(item => {
-      const sizes = item.sizes || {};
-      units += Object.values(sizes).reduce((a, b) => a + b, 0);
-    });
+    if (d._productType === 'footwear') {
+      units = Number(d._totalUnits) || 0;
+    } else {
+      const od = d.order_data || {};
+      Object.values(od).forEach(item => {
+        const sizes = (item && item.sizes) || {};
+        units += Object.values(sizes).reduce((a, b) => a + b, 0);
+      });
+    }
 
     const createdStr = d.created_at
       ? new Date(d.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -1010,7 +1421,9 @@ function renderDrafts() {
       ? '<span class="status-badge status-expired">Expired</span>'
       : '<span class="status-badge status-draft">Active</span>';
 
-    const draftUrl = `apparel/index.html#draft=${encodeURIComponent(d.token)}&from=dashboard`;
+    // Route the Open link to the right form based on product type.
+    const formPath = d._productType === 'footwear' ? 'footwear/index.html' : 'apparel/index.html';
+    const draftUrl = `${formPath}#draft=${encodeURIComponent(d.token)}&from=dashboard`;
 
     tbody.innerHTML += `
       <tr id="draft-row-${escapeAttr(d.token)}">
@@ -1036,7 +1449,13 @@ function renderDrafts() {
 
 async function deleteDraft(token) {
   if (!confirm('Delete this shared draft? This cannot be undone.')) return;
-  const { error } = await supa.from('draft_orders').delete().eq('token', token);
+  // Look up which table the draft belongs to via its product-type tag.
+  // Apparel: draft_orders.token. Footwear: footwear_drafts.share_token.
+  const draft = allDrafts.find(d => d.token === token);
+  const isFootwear = draft && draft._productType === 'footwear';
+  const table  = isFootwear ? 'footwear_drafts' : 'draft_orders';
+  const column = isFootwear ? 'share_token'     : 'token';
+  const { error } = await supa.from(table).delete().eq(column, token);
   if (error) {
     alert('Error deleting draft. Please try again.');
   } else {
@@ -1100,13 +1519,19 @@ async function saveTargets() {
     return;
   }
   document.getElementById('target-save-status').textContent = 'Saving…';
+  // Targets are saved under the active product type's category and the
+  // active season. The leaderboard's Edit Targets panel only writes the
+  // category currently in view, so admins editing footwear targets won't
+  // accidentally overwrite apparel rows and vice versa.
+  const targetSeason   = currentSeason || 'AW27';
+  const targetCategory = productType   || 'apparel';
   const orderReps = new Set(allOrders.filter(o => o.account_manager).map(o => o.account_manager));
   const allReps = [...new Set([...Object.keys(targets), ...orderReps])];
   const rows = allReps.map(rep => ({
     name: rep,
     target: parseFloat(document.getElementById('target-' + rep.replace(/\s+/g,'_')).value) || 0,
-    season: 'AW27',
-    category: 'apparel',
+    season: targetSeason,
+    category: targetCategory,
   }));
   const { error } = await supa.from('sales_targets').upsert(rows, { onConflict: 'name,season,category' });
   if (error) {
@@ -1190,6 +1615,35 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     showTab(tabId);
   });
 });
+
+// Product-type pills (Apparel | Footwear). On change, persist the
+// choice and trigger a fresh loadAll, which will pick the right loader
+// (apparel for now; footwear in Phase 3) and update the season
+// dropdown to that type's seasons + last-viewed selection.
+document.querySelectorAll('.product-pill').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const type = this.dataset.product;
+    if (type !== 'apparel' && type !== 'footwear') return;
+    if (type === productType) return;
+    productType = type;
+    try { localStorage.setItem(LS_PRODUCT_KEY, type); } catch (e) { /* ignore */ }
+    loadAll();
+  });
+});
+
+// Season dropdown. Selection is per-product-type and remembered in
+// localStorage so a refresh comes back to the same season the rep was
+// last viewing.
+const _seasonSelEl = document.getElementById('season-select');
+if (_seasonSelEl) {
+  _seasonSelEl.addEventListener('change', function () {
+    const val = this.value;
+    if (!val) return;
+    currentSeason = val;
+    try { localStorage.setItem(LS_SEASON_KEY(productType), val); } catch (e) { /* ignore */ }
+    loadAll();
+  });
+}
 
 // Leaderboard view toggle
 document.querySelectorAll('#leaderboard-view-toggle button').forEach(btn => {

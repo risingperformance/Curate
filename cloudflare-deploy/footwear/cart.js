@@ -1,8 +1,16 @@
 // ─── Cart ──────────────────────────────────────────────────────────────────
 //
 // Cart state lives on window.fwApp.state.cartItems as the brief specifies:
-// an array of { product_id, size, width, quantity }. All template modules
-// add to / remove from / inspect the cart through this module's API.
+// an array of { product_id, size, width, quantity, unit_price }. All template
+// modules add to / remove from / inspect the cart through this module's API.
+//
+// unit_price is a snapshot captured at add-to-cart time from the product's
+// wholesale price in the rep's country (aud_ws_price for AUD,
+// nzd_ws_price for NZD). It lets the dashboard compute total order value
+// without joining cart_items back to products. Lines added before this
+// field existed (legacy drafts) omit unit_price; the dashboard treats
+// missing values as 0 and surfaces a "value not tracked" note when any
+// legacy line is included in the total.
 //
 // Cart UX:
 //   - cart.openPicker(product, anchorEl) opens a size + quantity picker
@@ -64,6 +72,20 @@
     return -1;
   }
 
+  // Snapshot the wholesale unit price for a product in the rep's country.
+  // Returns a finite number or null. Called from add() so each newly
+  // appended cart_item carries the price the rep saw at the time of
+  // adding it. priceForCountry is hoisted from later in the same IIFE.
+  function snapshotUnitPrice(productId) {
+    var cat = window.fwApp && window.fwApp.catalogue;
+    if (!cat || !cat.getProductById) return null;
+    var p = cat.getProductById(productId);
+    if (!p) return null;
+    var pricing = priceForCountry(p);
+    var n = Number(pricing && pricing.ws);
+    return isFinite(n) ? n : null;
+  }
+
   function getQty(productId, size, width) {
     var i = findIndex(productId, size, width);
     return i >= 0 ? (Number(items()[i].quantity) || 0) : 0;
@@ -76,8 +98,21 @@
     var i = findIndex(productId, size, width);
     if (i >= 0) {
       arr[i].quantity = (Number(arr[i].quantity) || 0) + qty;
+      // Backfill unit_price on the existing line if it was added before
+      // price snapshotting was introduced (legacy drafts), so totals
+      // stay accurate once the rep touches an old line again.
+      if (arr[i].unit_price == null) {
+        var snap = snapshotUnitPrice(productId);
+        if (snap != null) arr[i].unit_price = snap;
+      }
     } else {
-      arr.push({ product_id: productId, size: size || null, width: width || null, quantity: qty });
+      arr.push({
+        product_id: productId,
+        size: size || null,
+        width: width || null,
+        quantity: qty,
+        unit_price: snapshotUnitPrice(productId)
+      });
     }
     schedulePersist();
     paintSummary();
@@ -91,8 +126,18 @@
       if (qty > 0) add(productId, size, width, qty);
       return;
     }
-    if (qty <= 0) arr.splice(i, 1);
-    else arr[i].quantity = qty;
+    if (qty <= 0) {
+      arr.splice(i, 1);
+    } else {
+      arr[i].quantity = qty;
+      // Same legacy backfill as add(): if the rep edits the qty of a
+      // line that was saved before unit_price was captured, snapshot
+      // the price now so downstream totals stay accurate.
+      if (arr[i].unit_price == null) {
+        var snap = snapshotUnitPrice(productId);
+        if (snap != null) arr[i].unit_price = snap;
+      }
+    }
     schedulePersist();
     paintSummary();
   }
