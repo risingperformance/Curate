@@ -230,6 +230,54 @@
     margin-left: auto; font-size: 12px; color: var(--mid);
   }
 
+  /* ── LOGINS TAB (Settings > Logins) ── */
+  .inner-tabs {
+    display: flex; gap: 4px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .inner-tab {
+    padding: 10px 18px; background: none; border: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 600;
+    color: var(--mid); cursor: pointer; transition: color 0.15s;
+  }
+  .inner-tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+  .inner-tab:hover:not(.active) { color: var(--navy); }
+  .inner-panel { display: none; }
+  .inner-panel.active { display: block; }
+
+  .stat-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 14px; margin-bottom: 18px;
+  }
+  .stat-card {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .stat-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    color: var(--mid); text-transform: uppercase; margin-bottom: 4px;
+  }
+  .stat-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1;
+  }
+  .stat-sub { font-size: 11px; color: var(--mid); margin-top: 4px; }
+
+  .role-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 99px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.3px;
+    background: #e8eef8; color: var(--blue);
+  }
+  .role-pill.admin { background: #fff3cf; color: #8a6d1e; }
+  .role-pill.manager { background: #e8f5ec; color: var(--green); }
+  .login-name { font-weight: 600; }
+  .login-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; color: var(--mid); }
+  .login-empty {
+    padding: 32px 16px; text-align: center; color: var(--mid); font-size: 13px;
+  }
+
   /* ── DATA GRID ── */
   .grid-wrap {
     background: var(--white); border: 1px solid var(--border);
@@ -749,6 +797,7 @@
   <button class="tab-btn" data-tab="milestones">Milestones</button>
   <button class="tab-btn" data-tab="email_templates">Templates</button>
   <button class="tab-btn" data-tab="images">Brand Assets</button>
+  <button class="tab-btn" data-tab="logins">Logins</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -770,6 +819,7 @@
 <div class="tab-panel" id="panel-milestones"></div>
 <div class="tab-panel" id="panel-email_templates"></div>
 <div class="tab-panel" id="panel-images"></div>
+<div class="tab-panel" id="panel-logins"></div>
 
 <!-- ═══════════════════════════════════════════════════════
      MODAL

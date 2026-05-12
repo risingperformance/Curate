@@ -143,7 +143,7 @@ const SECTIONS = {
   settings: {
     label: 'Settings',
     defaultTab: 'salespeople',
-    tabs: ['salespeople', 'milestones', 'email_templates', 'images'],
+    tabs: ['salespeople', 'milestones', 'email_templates', 'images', 'logins'],
   },
 };
 
@@ -180,6 +180,7 @@ const TAB_SLUGS_BY_SECTION = {
     'milestones':       'milestones',
     'templates':        'email_templates',
     'brand-assets':     'images',
+    'logins':           'logins',
   },
 };
 
@@ -437,6 +438,9 @@ async function activateTab(tab, opts = {}) {
 
   if (tab === 'images') {
     loadBucketFiles(state.activeBucket);
+  } else if (tab === 'logins') {
+    renderLoginsPanel();
+    loadLoginHistory();
   } else if (TABLES[tab]) {
     if (!state.data[tab]) await loadTable(tab);
     renderTable(tab);
@@ -453,6 +457,8 @@ function refreshActiveTab() {
   const tab = state.activeTab;
   if (tab === 'images') {
     loadBucketFiles(state.activeBucket);
+  } else if (tab === 'logins') {
+    loadLoginHistory();
   } else if (TABLES[tab]) {
     loadTable(tab).then(() => renderTable(tab));
   }
@@ -1279,6 +1285,370 @@ function downloadCsv(tableName) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LOGINS TAB (Settings > Logins)
+// Reads public.login_history (admin-only RLS). Rows are populated by the
+// trg_log_user_login trigger on auth.users.last_sign_in_at. See the
+// migration_login_history.sql migration for setup.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const loginsState = {
+  rows: [],
+  loaded: false,
+  loading: false,
+  inner: 'summary',          // 'summary' | 'activity'
+  windowDays: 30,            // 7 | 30 | 90 | 0 (all time)
+  roleFilter: 'all',         // 'all' | 'rep' | 'manager' | 'admin'
+  search: '',
+};
+
+function renderLoginsPanel() {
+  const panel = document.getElementById('panel-logins');
+  if (!panel) return;
+  // Idempotent shell so switching tabs doesn't re-bind handlers twice.
+  if (panel.dataset.built === '1') {
+    renderLoginsInner();
+    return;
+  }
+  panel.dataset.built = '1';
+
+  panel.innerHTML = `
+    <div class="section-title">Login History</div>
+    <div class="section-sub">
+      Captured by a database trigger on every successful sign-in. Only logins that occurred after the trigger was enabled appear here.
+    </div>
+
+    <div class="inner-tabs">
+      <button class="inner-tab active" data-action="loginsInnerTab" data-inner="summary">Summary by user</button>
+      <button class="inner-tab" data-action="loginsInnerTab" data-inner="activity">Activity feed</button>
+    </div>
+
+    <div class="toolbar">
+      <input class="search-box" type="text" placeholder="Search by name, email or role..." data-action="loginsSearch">
+      <select class="search-box" style="flex:0 0 auto;min-width:140px" data-action="loginsWindow">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="0">All time</option>
+      </select>
+      <select class="search-box" style="flex:0 0 auto;min-width:130px" data-action="loginsRole">
+        <option value="all">All roles</option>
+        <option value="rep">Reps only</option>
+        <option value="manager">Managers only</option>
+        <option value="admin">Admins only</option>
+      </select>
+      <button class="btn btn-outline" data-action="loginsRefresh">↻ Refresh</button>
+      <button class="btn btn-outline" data-action="loginsExport">📤 Export CSV</button>
+      <span class="row-count" id="logins-row-count"></span>
+    </div>
+
+    <div id="logins-stat-row"></div>
+    <div id="logins-content"></div>
+  `;
+  renderLoginsInner();
+}
+
+async function loadLoginHistory() {
+  if (loginsState.loading) return;
+  loginsState.loading = true;
+  const content = document.getElementById('logins-content');
+  if (content && !loginsState.loaded) {
+    content.innerHTML = `<div class="login-empty">Loading login history...</div>`;
+  }
+  try {
+    // Pull a generous window. login_history is small enough that fetching
+    // up to a few thousand rows and filtering client-side is fine.
+    const { data, error } = await supa
+      .from('login_history')
+      .select('id, user_id, email, full_name, role, country, logged_in_at')
+      .order('logged_in_at', { ascending: false })
+      .limit(5000);
+    if (error) throw error;
+    loginsState.rows = data || [];
+    loginsState.loaded = true;
+    renderLoginsInner();
+  } catch (e) {
+    if (content) {
+      content.innerHTML = `<div class="login-empty">Could not load login history: ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  } finally {
+    loginsState.loading = false;
+  }
+}
+
+function getFilteredLogins() {
+  const now = Date.now();
+  const cutoff = loginsState.windowDays > 0
+    ? now - loginsState.windowDays * 86400000
+    : 0;
+  const q = (loginsState.search || '').trim().toLowerCase();
+  const role = loginsState.roleFilter;
+
+  return loginsState.rows.filter(r => {
+    if (cutoff && new Date(r.logged_in_at).getTime() < cutoff) return false;
+    if (role !== 'all' && (r.role || '').toLowerCase() !== role) return false;
+    if (q) {
+      const hay = `${r.full_name || ''} ${r.email || ''} ${r.role || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderLoginsInner() {
+  // Toggle active inner tab
+  document.querySelectorAll('#panel-logins .inner-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.inner === loginsState.inner);
+  });
+
+  const rows = getFilteredLogins();
+  const statRow = document.getElementById('logins-stat-row');
+  const content = document.getElementById('logins-content');
+  const rowCount = document.getElementById('logins-row-count');
+  if (!content) return;
+
+  if (!loginsState.loaded) {
+    if (statRow) statRow.innerHTML = '';
+    content.innerHTML = `<div class="login-empty">Loading login history...</div>`;
+    if (rowCount) rowCount.textContent = '';
+    return;
+  }
+
+  if (loginsState.rows.length === 0) {
+    if (statRow) statRow.innerHTML = '';
+    content.innerHTML = `<div class="login-empty">
+      No login history yet. The first row will appear here after the next user signs into Curate.
+    </div>`;
+    if (rowCount) rowCount.textContent = '';
+    return;
+  }
+
+  if (loginsState.inner === 'summary') {
+    if (statRow) statRow.innerHTML = renderLoginsStatRow(rows);
+    content.innerHTML = renderLoginsSummary(rows);
+    if (rowCount) rowCount.textContent = `${countDistinctUsers(rows)} user${countDistinctUsers(rows) === 1 ? '' : 's'}`;
+  } else {
+    if (statRow) statRow.innerHTML = '';
+    content.innerHTML = renderLoginsActivity(rows);
+    if (rowCount) rowCount.textContent = `${rows.length} login${rows.length === 1 ? '' : 's'}`;
+  }
+}
+
+function countDistinctUsers(rows) {
+  const set = new Set();
+  for (const r of rows) set.add((r.email || '').toLowerCase());
+  return set.size;
+}
+
+function renderLoginsStatRow(rows) {
+  const distinct = countDistinctUsers(rows);
+  const total = rows.length;
+  const avg = distinct > 0 ? (total / distinct) : 0;
+  const mostRecent = rows[0]; // rows are pre-sorted desc
+  const mostRecentLabel = mostRecent
+    ? `${escapeHtml(mostRecent.full_name || mostRecent.email || 'Unknown')}`
+    : '-';
+  const mostRecentAgo = mostRecent ? relativeTime(mostRecent.logged_in_at) : '-';
+
+  return `
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Active users</div>
+        <div class="stat-value">${distinct}</div>
+        <div class="stat-sub">in selected window</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total logins</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">in selected window</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg per user</div>
+        <div class="stat-value">${distinct > 0 ? avg.toFixed(1) : '0.0'}</div>
+        <div class="stat-sub">logins / user</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Most recent</div>
+        <div class="stat-value" style="font-size:18px">${mostRecentAgo}</div>
+        <div class="stat-sub">${mostRecentLabel}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLoginsSummary(rows) {
+  // Group by lowercase email
+  const groups = new Map();
+  for (const r of rows) {
+    const key = (r.email || '').toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, {
+        full_name: r.full_name,
+        email: r.email,
+        role: r.role,
+        country: r.country,
+        count: 0,
+        first: r.logged_in_at,
+        last: r.logged_in_at,
+      });
+    }
+    const g = groups.get(key);
+    g.count += 1;
+    if (new Date(r.logged_in_at) < new Date(g.first)) g.first = r.logged_in_at;
+    if (new Date(r.logged_in_at) > new Date(g.last))  g.last  = r.logged_in_at;
+    // Prefer non-null name/role/country if a later row has them
+    if (!g.full_name && r.full_name) g.full_name = r.full_name;
+    if (!g.role && r.role) g.role = r.role;
+    if (!g.country && r.country) g.country = r.country;
+  }
+  const list = Array.from(groups.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return new Date(b.last) - new Date(a.last);
+  });
+
+  if (list.length === 0) {
+    return `<div class="login-empty">No logins match the current filters.</div>`;
+  }
+
+  const body = list.map(g => `
+    <tr>
+      <td class="login-name">${escapeHtml(g.full_name || '(no profile)')}</td>
+      <td class="login-mono">${escapeHtml(g.email || '')}</td>
+      <td>${renderRolePill(g.role)}</td>
+      <td>${escapeHtml(g.country || '')}</td>
+      <td class="num">${g.count}</td>
+      <td class="login-mono">${formatDateTime(g.first)}</td>
+      <td class="login-mono">${formatDateTime(g.last)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="grid-wrap">
+      <table class="data-grid">
+        <thead>
+          <tr>
+            <th>Full name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Country</th>
+            <th class="num">Logins</th>
+            <th>First login</th>
+            <th>Last login</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderLoginsActivity(rows) {
+  if (rows.length === 0) {
+    return `<div class="login-empty">No logins match the current filters.</div>`;
+  }
+  const body = rows.slice(0, 1000).map(r => `
+    <tr>
+      <td class="login-mono">${formatDateTime(r.logged_in_at)}</td>
+      <td class="login-name">${escapeHtml(r.full_name || '(no profile)')}</td>
+      <td class="login-mono">${escapeHtml(r.email || '')}</td>
+      <td>${renderRolePill(r.role)}</td>
+      <td>${escapeHtml(r.country || '')}</td>
+    </tr>
+  `).join('');
+  const trailer = rows.length > 1000
+    ? `<div class="login-empty" style="border-top:1px solid var(--border)">Showing first 1000 of ${rows.length} logins. Narrow the date or role filter to see the rest.</div>`
+    : '';
+  return `
+    <div class="grid-wrap">
+      <table class="data-grid">
+        <thead>
+          <tr>
+            <th style="width:170px">Time</th>
+            <th>Full name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Country</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+      ${trailer}
+    </div>
+  `;
+}
+
+function renderRolePill(role) {
+  if (!role) return '<span class="role-pill" style="background:#eee;color:#888">-</span>';
+  const cls = role === 'admin' ? 'role-pill admin'
+            : role === 'manager' ? 'role-pill manager'
+            : 'role-pill';
+  return `<span class="${cls}">${escapeHtml(role)}</span>`;
+}
+
+function formatDateTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)} min ago`;
+  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)} hr ago`;
+  const days = Math.round(diff / 86_400_000);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function exportLoginsCsv() {
+  const rows = getFilteredLogins();
+  if (rows.length === 0) { toast('No data to export', 'error'); return; }
+  let exportRows;
+  let label;
+  if (loginsState.inner === 'summary') {
+    label = 'login_summary';
+    const groups = new Map();
+    for (const r of rows) {
+      const key = (r.email || '').toLowerCase();
+      if (!groups.has(key)) {
+        groups.set(key, {
+          full_name: r.full_name || '',
+          email: r.email || '',
+          role: r.role || '',
+          country: r.country || '',
+          login_count: 0,
+          first_login: r.logged_in_at,
+          last_login: r.logged_in_at,
+        });
+      }
+      const g = groups.get(key);
+      g.login_count += 1;
+      if (new Date(r.logged_in_at) < new Date(g.first_login)) g.first_login = r.logged_in_at;
+      if (new Date(r.logged_in_at) > new Date(g.last_login))  g.last_login  = r.logged_in_at;
+    }
+    exportRows = Array.from(groups.values()).sort((a, b) => b.login_count - a.login_count);
+  } else {
+    label = 'login_activity';
+    exportRows = rows.map(r => ({
+      logged_in_at: r.logged_in_at,
+      full_name: r.full_name || '',
+      email: r.email || '',
+      role: r.role || '',
+      country: r.country || '',
+    }));
+  }
+  const csv = Papa.unparse(exportRows);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${label}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // IMAGE MANAGER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2092,6 +2462,12 @@ document.addEventListener('click', function(e) {
   else if (a === 'refreshBucketFiles') loadBucketFiles(state.activeBucket);
   else if (a === 'openInviteUser') openInviteUserModal();
   else if (a === 'closeInviteUser') closeInviteUserModal();
+  else if (a === 'loginsInnerTab') {
+    loginsState.inner = el.dataset.inner === 'activity' ? 'activity' : 'summary';
+    renderLoginsInner();
+  }
+  else if (a === 'loginsRefresh') loadLoginHistory();
+  else if (a === 'loginsExport') exportLoginsCsv();
 });
 
 document.addEventListener('change', function(e) {
@@ -2100,6 +2476,14 @@ document.addEventListener('change', function(e) {
   const a = el.dataset.action;
   if (a === 'csvUpload') handleCsvUpload(e, el.dataset.table);
   else if (a === 'imageInputChange') handleImageInputChange(e);
+  else if (a === 'loginsWindow') {
+    loginsState.windowDays = parseInt(el.value, 10) || 0;
+    renderLoginsInner();
+  }
+  else if (a === 'loginsRole') {
+    loginsState.roleFilter = el.value || 'all';
+    renderLoginsInner();
+  }
   else if (a === 'updateCell') {
     const val = el.type === 'checkbox' ? el.checked : el.value;
     const cellType = el.dataset.cellType;
@@ -2109,6 +2493,14 @@ document.addEventListener('change', function(e) {
     else if (cellType === 'number') updateCell(el.dataset.table, el.dataset.rowKey, el.dataset.col, val, isNew, 'number');
     else updateCell(el.dataset.table, el.dataset.rowKey, el.dataset.col, val, isNew);
   }
+});
+
+// Live search on the Logins toolbar search box.
+document.addEventListener('input', function(e) {
+  const el = e.target.closest('[data-action="loginsSearch"]');
+  if (!el) return;
+  loginsState.search = el.value || '';
+  renderLoginsInner();
 });
 
 // F07: Idle timeout - sign out after 30 minutes of inactivity
