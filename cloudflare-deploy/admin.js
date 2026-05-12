@@ -9,6 +9,28 @@ const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 // PIN login removed Apr 2026 -- now using Supabase Auth (email/password).
 // Only salespeople with role = 'admin' are granted portal access.
 
+// Auth gate: if there is no Supabase session token in localStorage, redirect
+// to the root login with ?next=admin.html so the user is bounced back after
+// signing in. Runs synchronously before any embedded login UI can render.
+// The role=admin check still happens after the session resolves; this gate
+// is only about "do we have any session at all?".
+(function adminAuthGate() {
+  try {
+    var key = 'sb-' + new URL(SUPA_URL).hostname.split('.')[0] + '-auth-token';
+    if (!localStorage.getItem(key)) {
+      var page = (location.pathname.split('/').pop() || 'index.html');
+      var nextVal = page + location.search + location.hash;
+      location.replace('index.html?next=' + encodeURIComponent(nextVal));
+    }
+  } catch(e) { /* ignore */ }
+})();
+
+function redirectToRootLogin() {
+  var page = (location.pathname.split('/').pop() || 'index.html');
+  var nextVal = page + location.search + location.hash;
+  location.replace('index.html?next=' + encodeURIComponent(nextVal));
+}
+
 // Table definitions — tells the portal the primary key and display config for each
 const TABLES = {
   customers: {
@@ -241,53 +263,22 @@ function savePrefs() {
 loadPrefs();
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SUPABASE AUTH LOGIN (admin-only)
-// PIN-based login removed Apr 2026 -- now using Supabase Auth (email/password)
+// SIGN OUT / ADMIN UNLOCK
+// Login itself lives on /index.html. admin.js only ever runs for users who
+// already have a session (the adminAuthGate IIFE at the top of this file
+// redirects out otherwise). So there is no handleLogin here anymore.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function handleLogin() {
-  const emailEl = document.getElementById('login-email');
-  const passEl  = document.getElementById('login-password');
-  const errEl   = document.getElementById('login-error');
-  const email   = emailEl.value.trim();
-  const password = passEl.value;
-  if (!email || !password) { errEl.textContent = 'Please enter email and password.'; return; }
-
-  errEl.textContent = 'Signing in...';
-  const { data, error } = await supa.auth.signInWithPassword({ email, password });
-  if (error) {
-    errEl.textContent = error.message === 'Invalid login credentials'
-      ? 'Incorrect email or password. Please try again.'
-      : 'Sign-in failed. Please try again or contact support.';
-    return;
-  }
-  // Verify user is a salesperson with admin role
-  const { data: sp } = await supa.from('salespeople').select('name, role, email').eq('email', email).single();
-  if (!sp) {
-    errEl.textContent = 'Account not linked to a salesperson. Contact your admin.';
-    await supa.auth.signOut();
-    return;
-  }
-  if (sp.role !== 'admin') {
-    errEl.textContent = 'This account does not have admin access.';
-    await supa.auth.signOut();
-    return;
-  }
-  adminUser = { name: sp.name || '', email: sp.email || email, role: sp.role };
-  unlockAdmin();
-}
-
 async function handleSignOut() {
+  // After signOut(), the Supabase token is cleared from localStorage. The
+  // reload triggers adminAuthGate again, which sees no token and redirects
+  // to the root login.
   await supa.auth.signOut();
   window.location.reload();
 }
 
 function unlockAdmin() {
-  document.getElementById('login-screen').classList.add('unlocked');
-  setTimeout(() => {
-    document.getElementById('login-screen').style.display = 'none';
-    init();
-  }, 500);
+  init();
 }
 
 // Check for existing session on page load
@@ -300,31 +291,15 @@ function unlockAdmin() {
       unlockAdmin();
       return;
     }
-    // Not admin or not a salesperson -- sign out and show login
-    await supa.auth.signOut();
+    // Session is valid but the account is not an admin (or not a salesperson
+    // at all). init()'s verifyAdminServerSide() renders the access-denied
+    // panel. Do not redirect to the root - that would loop because the user
+    // has a session but lacks the admin role.
+    if (typeof init === 'function') { init(); return; }
   }
-  // No session -- show login, focus email field
-  document.getElementById('login-email').focus();
-
-  // Enter key submits form
-  document.getElementById('login-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin();
-  });
-  document.getElementById('login-email').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('login-password').focus();
-  });
-
-  // Forgot password
-  document.getElementById('login-forgot').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const errEl = document.getElementById('login-error');
-    const email = document.getElementById('login-email').value.trim();
-    if (!email) { errEl.textContent = 'Enter your email address, then tap Forgot password.'; return; }
-    errEl.textContent = 'Sending reset link...';
-    const { error } = await supa.auth.resetPasswordForEmail(email);
-    if (error) { errEl.textContent = 'Could not send reset link. Please check your email and try again.'; }
-    else { errEl.textContent = 'Password reset email sent. Check your inbox.'; }
-  });
+  // No session at all: send to the canonical login on the root.
+  // ?next=admin.html brings the user straight back here after sign-in.
+  redirectToRootLogin();
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2240,12 +2215,6 @@ function doc_text(el) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SPECIFIC EVENT LISTENERS (refactored from inline handlers)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// Login button
-const loginBtn = document.getElementById('login-btn');
-if (loginBtn) {
-  loginBtn.addEventListener('click', handleLogin);
-}
 
 // Refresh tab button
 const btnRefresh = document.getElementById('btn-refresh');

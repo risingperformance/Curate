@@ -19,6 +19,31 @@
 var _sessionReady;
 var sessionCheckDone = new Promise(function(resolve) { _sessionReady = resolve; });
 
+// ── Post-login redirect target (?next=) ─────────────────────────────────────
+// Protected pages (dashboard, admin, appointment-diary, etc.) redirect here
+// when the user is not signed in, with ?next=<page>. After a successful login
+// we bounce back to that page. The allowlist guards against open-redirect
+// attacks: anything that is not an exact, relative match for one of these
+// strings is rejected.
+var ALLOWED_NEXT_PAGES = new Set([
+  'dashboard.html',
+  'admin.html',
+  'appointment-diary.html'
+]);
+function safeNextUrl(raw) {
+  if (!raw) return null;
+  var decoded;
+  try { decoded = decodeURIComponent(raw); } catch (_) { return null; }
+  // Reject absolute / protocol-relative / scheme-prefixed targets outright.
+  if (/^([a-z]+:)?\/\//i.test(decoded)) return null;
+  if (/^[a-z]+:/i.test(decoded)) return null;   // javascript:, data:, etc.
+  if (decoded.startsWith('/')) return null;     // we use relative paths only
+  // Split filename from query/hash and check the filename against the allowlist.
+  var pathOnly = decoded.split(/[?#]/)[0];
+  if (!ALLOWED_NEXT_PAGES.has(pathOnly)) return null;
+  return decoded;
+}
+
 // AUTH12 — currentUser is module-scoped (was on window). Reduces XSS exfil
 // surface and prevents client-side role tampering via DevTools.
 var currentUser = null;
@@ -115,6 +140,15 @@ function getCurrentUser() { return currentUser || {}; }
       role:    sp.role || 'rep',
       country: sp.country || null
     };
+
+    // If we arrived here via ?next=<page>, bounce the signed-in user back to
+    // the page they originally tried to open (validated against an allowlist).
+    var qNext = new URLSearchParams(window.location.search).get('next');
+    var nextTarget = safeNextUrl(qNext);
+    if (nextTarget) {
+      window.location.replace(nextTarget);
+      return;
+    }
 
     errEl.textContent = '';
     screen.classList.add('fade-out');

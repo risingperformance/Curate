@@ -2,14 +2,17 @@ const SUPA_URL = window.__SUPABASE_CONFIG.url;
 const SUPA_KEY = window.__SUPABASE_CONFIG.key;
 const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 
-// Hide login screen immediately if a session token exists in localStorage.
-// This prevents the login screen flashing before the async getSession resolves.
-(function() {
+// Auth gate: if there is no Supabase session token in localStorage, redirect
+// to the root login with ?next=<this page> so it bounces back after sign-in.
+// Runs synchronously before any other dashboard code so the user never sees
+// a half-rendered dashboard shell.
+(function authGate() {
   try {
-    var stored = localStorage.getItem('sb-' + new URL(SUPA_URL).hostname.split('.')[0] + '-auth-token');
-    if (stored) {
-      var ls = document.getElementById('login-screen');
-      if (ls) ls.style.display = 'none';
+    var key = 'sb-' + new URL(SUPA_URL).hostname.split('.')[0] + '-auth-token';
+    if (!localStorage.getItem(key)) {
+      var page = (location.pathname.split('/').pop() || 'index.html');
+      var nextVal = page + location.search + location.hash;
+      location.replace('index.html?next=' + encodeURIComponent(nextVal));
     }
   } catch(e) { /* ignore */ }
 })();
@@ -84,56 +87,23 @@ function escapeHtml(str) {
 }
 function escapeAttr(str) { return escapeHtml(String(str)).replace(/"/g, '&quot;'); }
 
-// ── SUPABASE AUTH LOGIN ─────────────────────────────────────────────────────
-async function handleLogin() {
-  const emailEl = document.getElementById('login-email');
-  const passEl  = document.getElementById('login-password');
-  const errEl   = document.getElementById('login-error');
-  const email   = emailEl.value.trim();
-  const password = passEl.value;
-  if (!email || !password) { errEl.textContent = 'Please enter email and password.'; return; }
-
-  errEl.textContent = 'Signing in...';
-  const { data, error } = await supa.auth.signInWithPassword({ email, password });
-  if (error) {
-    errEl.textContent = error.message === 'Invalid login credentials'
-      ? 'Incorrect email or password. Please try again.'
-      : 'Sign-in failed. Please try again or contact support.';
-    return;
-  }
-  // Verify user is a salesperson
-  const { data: sp } = await supa.from('salespeople').select('name, email, role, country').eq('email', email).single();
-  if (!sp) {
-    errEl.textContent = 'Account not linked to a salesperson. Contact your admin.';
-    await supa.auth.signOut();
-    return;
-  }
-  currentUser = {
-    name:    sp.name    || '',
-    email:   sp.email   || email,
-    role:    sp.role    || 'rep',
-    country: sp.country || null
-  };
-  unlockDashboard();
-}
+// ── SIGN OUT / DASHBOARD UNLOCK ─────────────────────────────────────────────
+// Login itself lives on /index.html. dashboard.js only ever runs for users
+// who already have a session (the authGate IIFE at the top of this file
+// redirects out otherwise). So there is no handleLogin here anymore.
 
 async function handleSignOut() {
+  // After signOut(), the Supabase token is cleared from localStorage. The
+  // reload triggers the authGate IIFE again, which sees no token and
+  // redirects to the root login.
   await supa.auth.signOut();
   window.location.reload();
 }
 
 function unlockDashboard() {
-  const screen = document.getElementById('login-screen');
-  // If already hidden by early check, just load data immediately.
-  if (screen.style.display === 'none') {
-    applyRoleVisibility();
-    loadAll();
-    return;
-  }
-  screen.classList.add('unlocked');
   // AUTH20 - reveal Edit Targets only for admin / manager (still RLS-gated server-side).
   applyRoleVisibility();
-  setTimeout(() => { screen.style.display = 'none'; loadAll(); }, 500);
+  loadAll();
 }
 
 function applyRoleVisibility() {
@@ -141,6 +111,14 @@ function applyRoleVisibility() {
   const isPrivileged = u.role === 'admin' || u.role === 'manager';
   const editBtn = document.getElementById('toggle-target-admin');
   if (editBtn) editBtn.hidden = !isPrivileged;
+}
+
+// Shared redirect helper: send the user to the root login with a ?next= back
+// to this page. Used when the session is missing or stale.
+function redirectToRootLogin() {
+  var page = (location.pathname.split('/').pop() || 'index.html');
+  var nextVal = page + location.search + location.hash;
+  location.replace('index.html?next=' + encodeURIComponent(nextVal));
 }
 
 // Check for existing session on page load
@@ -161,28 +139,9 @@ function applyRoleVisibility() {
     }
     await supa.auth.signOut();
   }
-  // No session - show login, focus email field
-  document.getElementById('login-email').focus();
-
-  // Enter key submits form
-  document.getElementById('login-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin();
-  });
-  document.getElementById('login-email').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('login-password').focus();
-  });
-
-  // Forgot password
-  document.getElementById('login-forgot').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const errEl = document.getElementById('login-error');
-    const email = document.getElementById('login-email').value.trim();
-    if (!email) { errEl.textContent = 'Enter your email address, then tap Forgot password.'; return; }
-    errEl.textContent = 'Sending reset link...';
-    const { error } = await supa.auth.resetPasswordForEmail(email);
-    if (error) { errEl.textContent = 'Could not send reset link. Please check your email and try again.'; }
-    else { errEl.textContent = 'Password reset email sent. Check your inbox.'; }
-  });
+  // No session (token expired, deleted, or salesperson row gone): kick back to
+  // the canonical login on the root. ?next= will bring them straight back here.
+  redirectToRootLogin();
 })();
 
 // ── TABS ─────────────────────────────────────────────────────────────────────
@@ -1588,9 +1547,6 @@ async function saveTargets() {
 // ═══════════════════════════════════════════════
 // EVENT LISTENERS (CSP-compliant, no unsafe-inline)
 // ═══════════════════════════════════════════════
-
-// Login button
-document.getElementById('login-btn').addEventListener('click', handleLogin);
 
 // Header buttons (legacy; the visible UI is the hamburger menu, but the
 // hidden buttons keep their listeners in case other code triggers them).

@@ -10,6 +10,27 @@ const EMAIL_EDGE_FN = SB_URL + '/functions/v1/send-order-email';
 
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 
+// Auth gate: if there is no Supabase session token in localStorage, redirect
+// to the root login with ?next=appointment-diary.html so the user is bounced
+// back here after signing in. Runs synchronously before any embedded login
+// UI can render.
+(function diaryAuthGate() {
+  try {
+    var key = 'sb-' + new URL(SB_URL).hostname.split('.')[0] + '-auth-token';
+    if (!localStorage.getItem(key)) {
+      var page = (location.pathname.split('/').pop() || 'index.html');
+      var nextVal = page + location.search + location.hash;
+      location.replace('index.html?next=' + encodeURIComponent(nextVal));
+    }
+  } catch(e) { /* ignore */ }
+})();
+
+function redirectToRootLogin() {
+  var page = (location.pathname.split('/').pop() || 'index.html');
+  var nextVal = page + location.search + location.hash;
+  location.replace('index.html?next=' + encodeURIComponent(nextVal));
+}
+
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
@@ -72,9 +93,8 @@ function goBackToPrebook(ev) {
   const { data: sp } = await sb.from('salespeople').select('name, email, role, country').eq('email', userEmail).single();
   if (!sp) return; // no salesperson record -- fall through to login
 
-  // Hide login screen, set identity, render
+  // Set identity, render (no login screen to hide - lives at /index.html now)
   window._diaryBypassActive = true;
-  document.getElementById('login-screen').style.display = 'none';
   me = { name: sp.name, email: sp.email };
 
   document.getElementById('app').style.display = 'block';
@@ -92,47 +112,39 @@ function goBackToPrebook(ev) {
 })();
 
 // ═══════════════════════════════════════════════
-// SUPABASE AUTH LOGIN
+// SESSION RESOLVE
+// Login itself lives on /index.html. This block only runs for users who
+// already have a session (the diaryAuthGate IIFE at the top of this file
+// redirects out otherwise). It resolves the salesperson record and renders
+// the diary.
 // ═══════════════════════════════════════════════
-(function initAuthLogin() {
-  const form    = document.getElementById('login-form');
-  const emailEl = document.getElementById('login-email');
-  const passEl  = document.getElementById('login-password');
-  const forgotEl= document.getElementById('login-forgot');
-  const errEl   = document.getElementById('login-error');
-
-  // Check for existing session on page load (skip if SSO bypass already handled login).
-  // Login screen is hidden by default; only reveal it if there's no usable session,
-  // so users coming from the home screen go straight to the diary without a flash.
+(function initAuth() {
   async function checkExistingSession() {
     if (window._diaryBypassActive) return;
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
       await loginWithSession(session);
     } else {
-      document.getElementById('login-screen').classList.add('visible');
-      emailEl.focus();
+      redirectToRootLogin();
     }
   }
 
-  // Resolve authenticated user to salesperson record
   async function loginWithSession(session) {
     const userEmail = session.user.email;
     const { data: sp, error } = await sb
       .from('salespeople').select('*').eq('email', userEmail).single();
 
     if (error || !sp) {
-      // Auth session exists but no salesperson record. Surface the login
-      // screen so the error message is actually visible.
-      document.getElementById('login-screen').classList.add('visible');
-      errEl.textContent = 'Account not linked to a salesperson. Contact your admin.';
+      // Auth session exists but the account is not linked to a salesperson
+      // row. Sign out and bounce back to the root login - the diary cannot
+      // render without a salesperson record.
       await sb.auth.signOut();
+      redirectToRootLogin();
       return;
     }
 
     me = { name: sp.name || '', email: sp.email || userEmail };
 
-    document.getElementById('login-screen').classList.add('gone');
     document.getElementById('app').style.display = 'block';
 
     // Update sidebar AM card
@@ -143,50 +155,6 @@ function goBackToPrebook(ev) {
     loadData();
     loadCustomers();
   }
-
-  // Sign in with email & password
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const email = emailEl.value.trim();
-    const password = passEl.value;
-    if (!email || !password) return;
-
-    const btn = form.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    errEl.textContent = 'Signing in...';
-
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      btn.disabled = false;
-      errEl.textContent = error.message === 'Invalid login credentials'
-        ? 'Incorrect email or password. Please try again.'
-        : 'Sign-in failed. Please try again or contact support.';
-      return;
-    }
-
-    await loginWithSession(data.session);
-    btn.disabled = false;
-  });
-
-  // Forgot password
-  forgotEl.addEventListener('click', async function(e) {
-    e.preventDefault();
-    const email = emailEl.value.trim();
-    if (!email) {
-      errEl.textContent = 'Enter your email address, then tap Forgot password.';
-      return;
-    }
-    errEl.textContent = 'Sending reset link...';
-    const { error } = await sb.auth.resetPasswordForEmail(email);
-    if (error) {
-      errEl.textContent = 'Could not send reset link. Please check your email and try again.';
-    } else {
-      errEl.style.color = '#4a4';
-      errEl.textContent = 'Password reset email sent. Check your inbox.';
-      setTimeout(() => { errEl.style.color = ''; }, 5000);
-    }
-  });
 
   window.addEventListener('DOMContentLoaded', function() { checkExistingSession(); });
 })();
