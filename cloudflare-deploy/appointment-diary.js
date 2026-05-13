@@ -540,11 +540,26 @@ function selectDay(key) {
   let html = `<div class="ddp-meta-line">${summary}</div>`;
   html += '<div class="ddp-timeline">';
 
+  // Track hours absorbed by a multi-hour slot that started earlier.
+  // Their content cell is suppressed (the spanning slot's cell covers
+  // them), but their hour label is still rendered so reps can read
+  // the time-of-day gutter even where no slot starts.
+  const absorbed = new Set();
+  const baseHour = TIMELINE_HOURS[0];
+  const lastHour = TIMELINE_HOURS[TIMELINE_HOURS.length - 1];
+
   TIMELINE_HOURS.forEach(hour => {
+    const rowIdx = hour - baseHour + 1; // 1-indexed grid row
+
+    // Hour label always renders, regardless of absorption.
+    html += `<div class="ddp-hour" style="grid-row:${rowIdx}">${timelineHourLabel(hour)}</div>`;
+
+    if (absorbed.has(hour)) return;
+
     const inHour = slotsByHour[hour];
-    let inner;
+
     if (inHour.length === 0) {
-      inner = isPast
+      const inner = isPast
         ? '<div class="ddp-row-empty disabled">&mdash;</div>'
         : `<div class="ddp-row-empty-split">
              <div class="ddp-row-empty ddp-row-book"
@@ -558,57 +573,78 @@ function selectDay(key) {
                + Add slot
              </div>
            </div>`;
-    } else {
-      inner = inHour.map(s => {
-        const bk = s.status === 'booked'
-          ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
-          : null;
-        const cls   = statusClass(s.status);
-        const title = bk ? escHtml(bookingAccountLabel(bk))
-                         : (s.location ? escHtml(s.location) : 'Available');
-        const dur   = durationMin(s.start_time, s.end_time);
-        const isOnHour = /:00$/.test(s.start_time);
-        const metaParts = [];
-        if (!isOnHour) metaParts.push(fmt(s.start_time));
-        if (bk) {
-          // Contact name (different from the account/title), then email + location.
-          if (bk.customer_name && bk.customer_name !== bookingAccountLabel(bk)) {
-            metaParts.push(escHtml(bk.customer_name));
-          }
-          if (bk.customer_email) metaParts.push(escHtml(bk.customer_email));
-          if (s.location)        metaParts.push(escHtml(s.location));
-        } else if (s.location && !isOnHour) {
-          metaParts.push(escHtml(s.location));
-        }
-        if (dur) metaParts.push(dur + ' min');
-        const meta = metaParts.join(' · ');
-        const status = bk
-          ? '<div class="ds-status booked">● Confirmed</div>'
-          : '<div class="ds-status avail">No invitation sent yet</div>';
-        const action = bk
-          ? `data-action="showDetail" data-id="${bk.id}"`
-          : `data-action="openInvite" data-id="${s.id}"`;
-        // Delete affordance: cancels the slot (available) or the booking
-        // (confirmed). Stops propagation so the parent card click doesn't
-        // also fire (which would open invite / detail).
-        const deleteBtn = bk
-          ? `<button class="ds-delete" type="button" data-action="cancelBooking" data-id="${bk.id}" title="Cancel booking" aria-label="Cancel booking">&times;</button>`
-          : `<button class="ds-delete" type="button" data-action="doCancel" data-id="${s.id}" title="Delete slot" aria-label="Delete slot">&times;</button>`;
-        return `<div class="detail-slot timeline ${cls}" ${action}>
-          <div class="ds-bar ${cls}"></div>
-          <div class="ds-body">
-            <div class="ds-name">${title}</div>
-            ${meta ? `<div class="ds-meta">${meta}</div>` : ''}
-            ${status}
-          </div>
-          ${deleteBtn}
-        </div>`;
-      }).join('');
+      html += `<div class="ddp-row-content" style="grid-row:${rowIdx}">${inner}</div>`;
+      return;
     }
-    html += `<div class="ddp-row">
-      <div class="ddp-hour">${timelineHourLabel(hour)}</div>
-      <div class="ddp-row-content">${inner}</div>
-    </div>`;
+
+    // One or more slots start in this hour. Compute the largest span
+    // (in hours) so the content cell can stretch across all rows the
+    // longest slot covers. Hours rounded up: a 90-minute slot reserves
+    // 2 rows; a precise card height inside the cell expresses the
+    // actual 90 minutes.
+    let maxSpan = 1;
+    inHour.forEach(s => {
+      const d = durationMin(s.start_time, s.end_time);
+      const span = Math.max(1, Math.ceil(d / 60));
+      if (span > maxSpan) maxSpan = span;
+      for (let i = 1; i < span; i++) {
+        const h = hour + i;
+        if (h <= lastHour) absorbed.add(h);
+      }
+    });
+    // Clamp so a slot extending past 6 PM doesn't try to occupy a
+    // grid row that doesn't exist.
+    const remainingRows = lastHour - hour + 1;
+    if (maxSpan > remainingRows) maxSpan = remainingRows;
+
+    const slotsHtml = inHour.map(s => {
+      const bk = s.status === 'booked'
+        ? bookings.find(b => b.slot_id === s.id && b.status === 'confirmed')
+        : null;
+      const cls   = statusClass(s.status);
+      const title = bk ? escHtml(bookingAccountLabel(bk))
+                       : (s.location ? escHtml(s.location) : 'Available');
+      const dur   = durationMin(s.start_time, s.end_time);
+      const isOnHour = /:00$/.test(s.start_time);
+      const metaParts = [];
+      if (!isOnHour) metaParts.push(fmt(s.start_time));
+      if (bk) {
+        if (bk.customer_name && bk.customer_name !== bookingAccountLabel(bk)) {
+          metaParts.push(escHtml(bk.customer_name));
+        }
+        if (bk.customer_email) metaParts.push(escHtml(bk.customer_email));
+        if (s.location)        metaParts.push(escHtml(s.location));
+      } else if (s.location && !isOnHour) {
+        metaParts.push(escHtml(s.location));
+      }
+      if (dur) metaParts.push(dur + ' min');
+      const meta = metaParts.join(' · ');
+      const status = bk
+        ? '<div class="ds-status booked">● Confirmed</div>'
+        : '<div class="ds-status avail">No invitation sent yet</div>';
+      const action = bk
+        ? `data-action="showDetail" data-id="${bk.id}"`
+        : `data-action="openInvite" data-id="${s.id}"`;
+      const deleteBtn = bk
+        ? `<button class="ds-delete" type="button" data-action="cancelBooking" data-id="${bk.id}" title="Cancel booking" aria-label="Cancel booking">&times;</button>`
+        : `<button class="ds-delete" type="button" data-action="doCancel" data-id="${s.id}" title="Delete slot" aria-label="Delete slot">&times;</button>`;
+      // Slot card height reflects the actual duration. Row track
+      // height is 56px with a 6px row gap, so a 60-min slot is 56px
+      // and each extra hour adds 62px (56 + 6). The duration label
+      // inside the meta line keeps the precise minutes visible.
+      const slotMinHeight = Math.max(56, Math.round(dur / 60 * 62 - 6));
+      return `<div class="detail-slot timeline ${cls}" style="min-height:${slotMinHeight}px" ${action}>
+        <div class="ds-bar ${cls}"></div>
+        <div class="ds-body">
+          <div class="ds-name">${title}</div>
+          ${meta ? `<div class="ds-meta">${meta}</div>` : ''}
+          ${status}
+        </div>
+        ${deleteBtn}
+      </div>`;
+    }).join('');
+
+    html += `<div class="ddp-row-content" style="grid-row:${rowIdx} / span ${maxSpan}">${slotsHtml}</div>`;
   });
 
   html += '</div>';

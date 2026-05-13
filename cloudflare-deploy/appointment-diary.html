@@ -933,18 +933,22 @@ textarea { resize: vertical; min-height: 68px; }
   letter-spacing: 0.04em;
   margin-bottom: 16px;
 }
+/* Timeline as a single CSS grid: column 1 is the hour-label gutter,
+   column 2 is the slot content. Each hour gets a row (min 56px), and
+   a multi-hour slot's content cell spans the rows it covers via
+   `grid-row: <start> / span N`. This lets a 180-minute booking
+   visually fill all three hour rows it occupies, while still keeping
+   the hour labels (3 PM, 4 PM, etc.) visible on the side. */
 .ddp-timeline {
-  display: flex; flex-direction: column;
-  gap: 6px;
-}
-.ddp-row {
   display: grid;
   grid-template-columns: 56px 1fr;
-  gap: 14px;
+  column-gap: 14px;
+  row-gap: 6px;
+  grid-auto-rows: minmax(56px, auto);
   align-items: stretch;
-  min-height: 56px;
 }
 .ddp-hour {
+  grid-column: 1;
   font-family: 'Playfair Display', serif;
   font-size: 14px; font-weight: 500;
   color: rgba(255,255,255,0.55);
@@ -953,6 +957,7 @@ textarea { resize: vertical; min-height: 68px; }
   line-height: 1;
 }
 .ddp-row-content {
+  grid-column: 2;
   display: flex; flex-direction: column;
   gap: 6px;
   min-height: 0;
