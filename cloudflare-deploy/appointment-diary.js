@@ -1051,21 +1051,59 @@ function openBookAppointment(date, hour) {
     if (quickSelCust.contact_email) document.getElementById('inv-email').value = quickSelCust.contact_email;
   }
 
-  // Fill the fixed time card.
+  // Fill the time card. Date is read-only (set by which day the rep
+  // clicked into). Time and Length are editable inputs whose change
+  // handlers shift bookContext + refresh the email preview.
   const d  = new Date(date + 'T00:00:00');
   const dl = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const len = durationLabel(start, end);
-  const dEl = document.getElementById('book-time-date');
-  const tEl = document.getElementById('book-time-range');
-  const lEl = document.getElementById('book-time-length');
+  const dEl   = document.getElementById('book-time-date');
+  const tInp  = document.getElementById('book-time-start');
+  const tEnd  = document.getElementById('book-time-range');
+  const lSel  = document.getElementById('book-time-length-select');
+
   if (dEl) dEl.textContent = dl;
-  if (tEl) tEl.textContent = `${fmt(start)} - ${fmt(end)}`;
-  if (lEl) lEl.textContent = len;
+  if (tInp) tInp.value = start;
+  if (lSel) {
+    const initialMin = durationMin(start, end) || 60;
+    // If the initial duration isn't one of the preset options, fall
+    // back to 60. Reps can still tweak it from the dropdown afterwards.
+    const presets = Array.from(lSel.options).map(o => Number(o.value));
+    lSel.value = presets.indexOf(initialMin) >= 0 ? String(initialMin) : '60';
+  }
+  syncBookTimeSuffix();
 
   setInviteModalChrome();
   renderTemplatePicker();
   renderInvitePreview();
   openM('m-invite');
+}
+
+// Recompute bookContext.start_time and end_time from the current input
+// values and update the readonly "- 1:00pm" suffix that sits next to
+// the time input so the rep can see the resulting end time at a glance.
+// Called from the change handlers on both inputs.
+function syncBookTimeSuffix() {
+  if (!bookContext) return;
+  const tInp = document.getElementById('book-time-start');
+  const lSel = document.getElementById('book-time-length-select');
+  const tEnd = document.getElementById('book-time-range');
+  if (!tInp || !lSel) return;
+
+  const start = tInp.value || bookContext.start_time;
+  const lenMin = Number(lSel.value) || 60;
+
+  // Build end_time = start + lenMin, formatted as HH:MM. Clamp at 23:59
+  // so we don't roll past midnight on a single-day booking.
+  const [hh, mm] = start.split(':').map(n => parseInt(n, 10));
+  const totalMin = Math.min(23 * 60 + 59, hh * 60 + mm + lenMin);
+  const eh = Math.floor(totalMin / 60);
+  const em = totalMin % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  const end = `${pad(eh)}:${pad(em)}`;
+
+  bookContext.start_time = start;
+  bookContext.end_time   = end;
+  if (tEnd) tEnd.textContent = '- ' + fmt(end);
 }
 
 function custSearch(q) {
@@ -1931,6 +1969,18 @@ document.getElementById('cust-q').addEventListener('input', function() {
 ['inv-first', 'inv-last', 'inv-email', 'book-location'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', renderInvitePreview);
+});
+
+// Book-mode time + length editors. Each change recomputes end_time on
+// bookContext (via syncBookTimeSuffix) and re-renders the email
+// preview so the confirmation copy reflects the new time.
+['book-time-start', 'book-time-length-select'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('change', function () {
+    syncBookTimeSuffix();
+    renderInvitePreview();
+  });
 });
 
 // F07: Idle timeout - sign out after 30 minutes of inactivity

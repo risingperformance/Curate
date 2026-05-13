@@ -1192,6 +1192,28 @@ textarea { resize: vertical; min-height: 68px; }
   color: var(--text); font-weight: 700;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 13px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+/* Compact inline editor used for Time + Length inside the booking
+   card. Right-aligned to match the read-only Date row. */
+.book-time-input {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-lt);
+  border-radius: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.book-time-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(232,184,75,0.18);
+}
+.book-time-suffix {
+  color: var(--muted); font-weight: 500;
+  font-size: 12px;
 }
 
 </style>
@@ -1474,7 +1496,12 @@ textarea { resize: vertical; min-height: 68px; }
           <!-- Invite mode: pick from many available slots -->
           <div class="slot-picker slot-picker-grid" id="slot-picker"></div>
 
-          <!-- Book mode: a single fixed time + optional location field -->
+          <!-- Book mode: a single time + optional location field. The
+               Date is fixed from the day the rep clicked, but Time and
+               Length are editable so reps can shift a booking forward
+               by 15 minutes or stretch it from 1 hour to 3 hours
+               without leaving this modal. Changes flow through
+               bookContext and refresh the email preview live. -->
           <div id="book-time-panel" hidden>
             <div class="book-time-card">
               <div class="book-time-line">
@@ -1483,11 +1510,25 @@ textarea { resize: vertical; min-height: 68px; }
               </div>
               <div class="book-time-line">
                 <span class="book-time-label">Time</span>
-                <span class="book-time-value" id="book-time-range">&mdash;</span>
+                <span class="book-time-value">
+                  <input type="time" id="book-time-start" class="book-time-input" step="900">
+                  <span class="book-time-suffix" id="book-time-range">&mdash;</span>
+                </span>
               </div>
               <div class="book-time-line">
                 <span class="book-time-label">Length</span>
-                <span class="book-time-value" id="book-time-length">&mdash;</span>
+                <span class="book-time-value">
+                  <select id="book-time-length-select" class="book-time-input">
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60" selected>1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                    <option value="150">2.5 hours</option>
+                    <option value="180">3 hours</option>
+                    <option value="240">4 hours</option>
+                  </select>
+                </span>
               </div>
             </div>
             <div class="fg" style="margin-top:14px;margin-bottom:0">
