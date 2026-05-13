@@ -526,14 +526,34 @@ async function fetchNextAppointments(n) {
   const u = currentUser || {};
   const isAdmin = u.role === 'admin';
   let q = supa.from('appointment_bookings')
-    .select('id, date, start_time, end_time, customer_name, am_name, location')
+    .select('id, date, start_time, end_time, customer_name, am_name, location, account_code')
     .gte('date', today)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
     .limit(n);
   if (!isAdmin && u.name) q = q.eq('am_name', u.name);
   const res = await q;
-  return res.data || [];
+  const rows = res.data || [];
+
+  // Enrich each row with its customer's account_name so the dashboard can
+  // show "Lenny Good · ABC Golf Club" rather than just the contact name.
+  // A second round-trip beats a PostgREST embed here because we don't rely
+  // on a formally-declared foreign key between the two tables.
+  const codes = Array.from(new Set(rows.map(r => r.account_code).filter(Boolean)));
+  if (codes.length > 0) {
+    const { data: custs } = await supa
+      .from('customers')
+      .select('account_code, account_name')
+      .in('account_code', codes);
+    const nameByCode = {};
+    (custs || []).forEach(c => { nameByCode[c.account_code] = c.account_name; });
+    rows.forEach(r => {
+      if (r.account_code && nameByCode[r.account_code]) {
+        r.account_name = nameByCode[r.account_code];
+      }
+    });
+  }
+  return rows;
 }
 
 function renderNextAppointments(rows) {
@@ -553,18 +573,22 @@ function renderNextAppointments(rows) {
     const hh12 = ((hh + 11) % 12) + 1;
     return hh12 + ':' + m + ' ' + ampm;
   };
-  el.innerHTML = rows.map(r => `
+  el.innerHTML = rows.map(r => {
+    const contact = escapeHtml(r.customer_name || '-');
+    const account = r.account_name ? ' &middot; ' + escapeHtml(r.account_name) : '';
+    return `
     <div class="dash-appt">
       <div class="dash-appt-date">
         <div class="dash-appt-day">${fmtDay(r.date)}</div>
         <div class="dash-appt-month">${fmtMon(r.date)}</div>
       </div>
       <div>
-        <div class="dash-appt-name">${escapeHtml(r.customer_name || '-')}</div>
+        <div class="dash-appt-name">${contact}${account}</div>
         <div class="dash-appt-meta">${escapeHtml(r.am_name || '')}${r.location ? ' &middot; ' + escapeHtml(r.location) : ''}</div>
       </div>
       <div class="dash-appt-time">${fmtTime(r.start_time)}<small>${escapeHtml(r.location || '')}</small></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function setText(id, value) {
