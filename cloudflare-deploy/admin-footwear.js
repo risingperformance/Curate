@@ -593,27 +593,31 @@
         }).join('')
       + '</select>';
 
-    // Build a checklist of every active slide. Each row is a label
-    // wrapping a checkbox so the whole row is clickable. The actual
-    // checked / disabled state is decided by syncForOption() once the
-    // modal is in the DOM, because it depends on the currently-selected
-    // option and the existing rules in state.
+    // One row per active slide. Each row has an Exclude/Include
+    // segmented toggle. Neither pressed = no rule for that pair.
+    // Pressing one auto-unpresses the other (the DB unique index on
+    // option_id + slide_id allows at most one rule per pair). Rows
+    // whose pair already has a rule for the current option render in
+    // a disabled state with the existing side pre-pressed.
     var slidesList = '<div class="qn-slide-checklist" id="add-r-slides">'
       + activeSlides.map(function (s) {
-          return '<label class="qn-slide-row" data-slide-id="' + escapeAttr(s.id) + '">'
-               +   '<input type="checkbox" class="add-r-slide" value="' + escapeAttr(s.id) + '">'
-               +   '<span>' + escapeHtml(s.title) + '</span>'
-               +   '<span class="qn-slide-row-hint" hidden>Already excluded</span>'
-               + '</label>';
+          return '<div class="qn-slide-row" data-slide-id="' + escapeAttr(s.id) + '">'
+               +   '<span class="qn-slide-row-title">' + escapeHtml(s.title) + '</span>'
+               +   '<span class="qn-slide-row-hint" hidden></span>'
+               +   '<div class="qn-rule-toggle" data-rule-toggle>'
+               +     '<button type="button" data-state="exclude_slide">Exclude</button>'
+               +     '<button type="button" data-state="include_slide">Include</button>'
+               +   '</div>'
+               + '</div>';
         }).join('')
       + '</div>';
 
     openModal(''
       + '<h3>New rule</h3>'
-      + '<p>Pick the option, then check every slide the deck should exclude when the customer picks that option.</p>'
+      + '<p>Pick the option, then choose Exclude or Include for each slide. Press a button twice to clear it.</p>'
       + '<div class="qn-form">'
       +   '<label>When the user picks' + optionsSelect + '</label>'
-      +   '<label>Exclude these slides' + slidesList + '</label>'
+      +   '<label>Slides' + slidesList + '</label>'
       +   '<div id="add-r-preview" class="qn-rule-preview"></div>'
       + '</div>'
       + '<div class="modal-actions">'
@@ -621,65 +625,92 @@
       +   '<button class="btn btn-primary" data-fw-action="commitAddRule" data-question-id="' + escapeAttr(qid) + '">Create rule</button>'
       + '</div>');
 
-    // Update the row state for the currently selected option:
-    // slides that already have an exclude rule for this option are
-    // pre-checked AND disabled so the admin can see them but can't
-    // accidentally duplicate. The "Already excluded" hint surfaces
-    // beside those rows.
+    // Read each row's current toggle state, returning one of
+    // '', 'exclude_slide', 'include_slide'. Used by the preview and
+    // submit handler.
+    function readRowState(row) {
+      var pressed = row.querySelector('.qn-rule-toggle button.active');
+      return pressed ? pressed.getAttribute('data-state') : '';
+    }
+
+    // Pressing a toggle button: clear sibling, toggle this one off
+    // if it was already on. Disabled rows ignore clicks because their
+    // pair already has a rule that the admin should delete through
+    // the per-rule UI.
+    function onToggleClick(ev) {
+      var btn = ev.target.closest('.qn-rule-toggle button');
+      if (!btn) return;
+      if (btn.disabled) return;
+      var toggle = btn.closest('.qn-rule-toggle');
+      var wasActive = btn.classList.contains('active');
+      toggle.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+      if (!wasActive) btn.classList.add('active');
+      updatePreview();
+    }
+
+    // Reflect the existing rules for the currently selected option:
+    // each row with an existing rule has its matching button
+    // pre-pressed AND disabled, and a small "Saved" hint is shown so
+    // the admin can tell the row is read-only here. Removal is still
+    // done through the per-rule delete UI on the question page.
     function syncForOption() {
-      var optEl = document.getElementById('add-r-option');
+      var optEl    = document.getElementById('add-r-option');
       var optionId = optEl.value;
-      var existing = new Set(state.rules
-        .filter(function (r) { return r.option_id === optionId && r.action === 'exclude_slide'; })
-        .map(function (r) { return r.slide_id; }));
+      var existing = {};
+      state.rules.forEach(function (r) {
+        if (r.option_id === optionId) existing[r.slide_id] = r.action;
+      });
       document.querySelectorAll('#add-r-slides .qn-slide-row').forEach(function (row) {
         var slideId = row.getAttribute('data-slide-id');
-        var cb      = row.querySelector('input[type="checkbox"]');
         var hint    = row.querySelector('.qn-slide-row-hint');
-        if (existing.has(slideId)) {
-          cb.checked  = true;
-          cb.disabled = true;
+        var buttons = row.querySelectorAll('.qn-rule-toggle button');
+        var prior   = existing[slideId];
+        if (prior) {
+          buttons.forEach(function (b) {
+            b.disabled = true;
+            b.classList.toggle('active', b.getAttribute('data-state') === prior);
+          });
           row.classList.add('disabled');
-          if (hint) hint.hidden = false;
+          if (hint) {
+            hint.hidden = false;
+            hint.textContent = prior === 'include_slide' ? 'Already included' : 'Already excluded';
+          }
         } else {
-          cb.disabled = false;
+          buttons.forEach(function (b) {
+            b.disabled = false;
+            // Don't auto-clear a user-set toggle when the option
+            // didn't have a prior rule for it; only reset rows that
+            // just left the prior-state group.
+            if (b.disabled === false) { /* no-op */ }
+          });
           row.classList.remove('disabled');
-          if (hint) hint.hidden = true;
-          // Don't auto-uncheck user-set checkboxes; only reset state
-          // for rows that just changed disability.
+          if (hint) { hint.hidden = true; hint.textContent = ''; }
         }
       });
+      updatePreview();
     }
 
     function updatePreview() {
-      var optEl = document.getElementById('add-r-option');
+      var optEl   = document.getElementById('add-r-option');
       var optText = optEl.options[optEl.selectedIndex].text;
-      // Only count checkboxes the user can actually act on (skip the
-      // pre-checked + disabled ones, which represent existing rules
-      // and won't be re-inserted on submit).
-      var picks = Array.from(document.querySelectorAll('#add-r-slides input.add-r-slide'))
-        .filter(function (cb) { return cb.checked && !cb.disabled; });
-      var summary;
-      if (picks.length === 0) {
-        summary = '(no new slides selected)';
-      } else if (picks.length === 1) {
-        summary = 'slide ' + picks[0].parentElement.querySelector('span').textContent;
-      } else {
-        summary = picks.length + ' slides';
-      }
+      var excl = 0, incl = 0;
+      document.querySelectorAll('#add-r-slides .qn-slide-row').forEach(function (row) {
+        if (row.classList.contains('disabled')) return;
+        var st = readRowState(row);
+        if (st === 'exclude_slide') excl++;
+        else if (st === 'include_slide') incl++;
+      });
+      var parts = [];
+      if (excl) parts.push('exclude ' + excl + ' slide' + (excl === 1 ? '' : 's'));
+      if (incl) parts.push('include ' + incl + ' slide' + (incl === 1 ? '' : 's'));
+      var body = parts.length === 0 ? '(no new rules will be created)' : parts.join(' and ');
       document.getElementById('add-r-preview').textContent =
-        'When user picks ' + optText + ', the deck will exclude ' + summary + '.';
+        'When user picks ' + optText + ', the deck will ' + body + '.';
     }
 
-    document.getElementById('add-r-option').addEventListener('change', function () {
-      syncForOption();
-      updatePreview();
-    });
-    document.querySelectorAll('#add-r-slides input.add-r-slide').forEach(function (cb) {
-      cb.addEventListener('change', updatePreview);
-    });
+    document.getElementById('add-r-option').addEventListener('change', syncForOption);
+    document.getElementById('add-r-slides').addEventListener('click', onToggleClick);
     syncForOption();
-    updatePreview();
   }
 
   async function commitAddRule(qid) {
@@ -688,25 +719,26 @@
       toast('Pick an option.', 'error');
       return;
     }
-    // Pull every checked-and-enabled checkbox. Disabled boxes represent
-    // rules that already exist for this option and would only trip the
-    // unique-index error, so we skip them here.
-    var picks = Array.from(document.querySelectorAll('#add-r-slides input.add-r-slide'))
-      .filter(function (cb) { return cb.checked && !cb.disabled; })
-      .map(function (cb) { return cb.value; });
-    if (picks.length === 0) {
-      toast('Check at least one slide to exclude.', 'error');
+    // Walk every enabled row and collect its toggle state. Disabled
+    // rows are skipped — they represent rules that already exist and
+    // would only trip the unique-index error.
+    var rows = [];
+    document.querySelectorAll('#add-r-slides .qn-slide-row').forEach(function (row) {
+      if (row.classList.contains('disabled')) return;
+      var pressed = row.querySelector('.qn-rule-toggle button.active');
+      if (!pressed) return; // No rule for this slide
+      rows.push({
+        question_id: qid,
+        option_id:   optionId,
+        action:      pressed.getAttribute('data-state'),
+        slide_id:    row.getAttribute('data-slide-id')
+      });
+    });
+    if (rows.length === 0) {
+      toast('Press Exclude or Include on at least one slide.', 'error');
       return;
     }
 
-    var rows = picks.map(function (slideId) {
-      return {
-        question_id: qid,
-        option_id:   optionId,
-        action:      'exclude_slide',
-        slide_id:    slideId
-      };
-    });
     var res = await supa.from('footwear_question_rules').insert(rows);
     if (res.error) {
       // The DB has a unique index on (option_id, slide_id). If a
