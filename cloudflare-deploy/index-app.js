@@ -355,7 +355,8 @@ async function showSeasonLanding() {
                 <div class="dash-draft-meta">Last edited ${mod}</div>
               </div>
               <div class="dash-draft-units">${d.units} units</div>
-              <button class="dash-draft-del" data-action="confirmDeleteDraft" data-token="${escapeAttr(d.token)}" data-account="${escapeAttr(d.account)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Delete draft">&times;</button>
+              <button class="dash-draft-open" data-action="openDraftFromLanding" data-token="${escapeAttr(d.token)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Open draft">Open</button>
+              <button class="dash-draft-del" data-action="confirmDeleteDraft" data-token="${escapeAttr(d.token)}" data-account="${escapeAttr(d.account)}" data-category="${escapeAttr(d.category || 'apparel')}" title="Delete draft">Delete</button>
             </div>`;
         }).join('')
       : '<div class="dash-drafts-empty">No drafts yet for this season.</div>';

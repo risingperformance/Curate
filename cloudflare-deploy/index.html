@@ -2057,13 +2057,29 @@
     color: #0a1834; letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px;
     padding: 4px 10px; background: #faf5e8; border-radius: 4px;
   }
-  .dash-draft-del {
-    width: 26px; height: 26px; border-radius: 4px;
-    background: transparent; border: 0; color: #c0272d; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; line-height: 1;
+  .dash-draft-open {
+    padding: 6px 14px; border-radius: 4px;
+    background: #0a1834; color: #fff;
+    border: 1px solid #0a1834;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 11px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
   }
-  .dash-draft-del:hover { background: #fef2f2; }
+  .dash-draft-open:hover { background: #15234a; border-color: #15234a; }
+  .dash-draft-del {
+    padding: 6px 14px; border-radius: 4px;
+    background: #fff; color: #c0272d;
+    border: 1px solid #f3c2c4;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 11px; cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .dash-draft-del:hover {
+    background: #c0272d; color: #fff; border-color: #c0272d;
+  }
   .dash-drafts-empty { padding: 12px 8px; color: #6b7280; font-style: italic; font-size: 13px; }
 
   /* ── Side panels ────────────────────────────────────────────────── */
