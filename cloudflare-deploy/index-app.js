@@ -405,12 +405,17 @@ async function loadDashboardSideData() {
   const openApparelSeason  = (openSeasons.find(s => s.category === 'apparel')  || {}).season_id || null;
   const openFootwearSeason = (openSeasons.find(s => s.category === 'footwear') || {}).season_id || null;
 
-  // Fire requests in parallel
-  const [apptsRes, fwOrdersRes, apOrdersRes, topProductsRes, appt5Res, milestoneRes] = await Promise.all([
+  // Fire requests in parallel. Footwear top-10 is computed client-side
+  // from footwear_drafts.cart_items rather than via the apparel RPC,
+  // because the order data for footwear lives in JSON columns. The
+  // RPC keeps its role for apparel; if it ever starts returning
+  // footwear rows we'll prefer those (see the merge logic below).
+  const [apptsRes, fwOrdersRes, apOrdersRes, topProductsRes, fwTopRes, appt5Res, milestoneRes] = await Promise.all([
     appointmentsThisWeek(),
     countSubmittedFootwearOrders(openFootwearSeason),
     countSubmittedApparelOrders(openApparelSeason),
     fetchTopProducts(openApparelSeason, openFootwearSeason),
+    fetchTopFootwearProducts(openFootwearSeason),
     fetchNextAppointments(5),
     fetchNextMilestone()
   ]);
@@ -424,9 +429,10 @@ async function loadDashboardSideData() {
   setText('stat-ap-orders-sub', apOrdersRes.sub);
   renderNextMilestone(milestoneRes);
 
-  // Top products: server-side RPC returns rows already aggregated and
-  // ranked. Re-shape into the { apparel: [], footwear: [] } shape the
-  // renderer expects.
+  // Top products: the RPC returns aggregated apparel rows (and may
+  // also return footwear rows). Reshape into the renderer's
+  // { apparel: [], footwear: [] } shape. The client-side footwear
+  // aggregator below fills in footwear when the RPC doesn't.
   window._dashTopProducts = { apparel: [], footwear: [] };
   (topProductsRes || []).forEach(r => {
     const list = window._dashTopProducts[r.category];
@@ -438,6 +444,12 @@ async function loadDashboardSideData() {
       units: Number(r.units || 0)
     });
   });
+  // Prefer the client-side footwear ranking when the RPC didn't
+  // surface any footwear rows for the current season. Overwriting is
+  // safe because the renderer only ever shows one category at a time.
+  if (window._dashTopProducts.footwear.length === 0 && fwTopRes && fwTopRes.length) {
+    window._dashTopProducts.footwear = fwTopRes;
+  }
   renderTopProducts('apparel');
 
   // Appointments
@@ -490,6 +502,84 @@ async function fetchTopProducts(openApparelSeason, openFootwearSeason) {
     return [];
   }
   return res.data || [];
+}
+
+// Client-side top-10 ranking for footwear. Footwear submitted orders
+// live in footwear_drafts.cart_items as JSON, so the SQL RPC can't
+// aggregate them with a simple GROUP BY the way it can for apparel
+// order_lines. We pull the cart_items for the chosen season, sum the
+// quantities per product_id, then join to the products table for
+// display fields.
+//
+// Season resolution: prefers the explicitly-active footwear season
+// (status='active' in the seasons table). When no footwear season is
+// active, falls back to the season_id of the most recently submitted
+// footwear order so the home screen always shows something useful
+// between active seasons.
+//
+// Returns up to 10 ranked records shaped for renderTopProducts:
+//   { name, sub, sku, units }
+async function fetchTopFootwearProducts(openFootwearSeason) {
+  let seasonId = openFootwearSeason;
+  if (!seasonId) {
+    const recentRes = await supa.from('footwear_drafts')
+      .select('season_id')
+      .eq('status', 'submitted')
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    seasonId = (recentRes.data && recentRes.data[0] && recentRes.data[0].season_id) || null;
+  }
+  if (!seasonId) return [];
+
+  const draftsRes = await supa.from('footwear_drafts')
+    .select('cart_items')
+    .eq('status', 'submitted')
+    .eq('season_id', seasonId);
+  if (draftsRes.error) {
+    console.warn('Top footwear products fetch failed:', draftsRes.error);
+    return [];
+  }
+  const drafts = draftsRes.data || [];
+
+  // Aggregate units per product_id across every submitted draft.
+  const unitsById = new Map();
+  drafts.forEach(d => {
+    const items = Array.isArray(d.cart_items) ? d.cart_items : [];
+    items.forEach(it => {
+      const id  = it.product_id;
+      const qty = Number(it.quantity) || 0;
+      if (!id || qty <= 0) return;
+      unitsById.set(id, (unitsById.get(id) || 0) + qty);
+    });
+  });
+  if (!unitsById.size) return [];
+
+  // Join to products for sku / name / colour. Only fetch the ids we
+  // actually saw in cart_items so we don't pull the whole catalogue.
+  const ids = Array.from(unitsById.keys());
+  const prodRes = await supa.from('products')
+    .select('id, sku, product_name, colour')
+    .in('id', ids);
+  if (prodRes.error) {
+    console.warn('Top footwear products join failed:', prodRes.error);
+    return [];
+  }
+  const byId = {};
+  (prodRes.data || []).forEach(p => { byId[p.id] = p; });
+
+  // Rank by units desc, take top 10, reshape for the renderer.
+  return ids
+    .map(id => {
+      const p = byId[id] || {};
+      return {
+        name:  p.product_name || '(unnamed)',
+        sub:   p.colour || '',
+        sku:   p.sku || '',
+        units: unitsById.get(id)
+      };
+    })
+    .sort((a, b) => b.units - a.units)
+    .slice(0, 10);
 }
 
 function renderTopProducts(cat) {

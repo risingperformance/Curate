@@ -528,6 +528,32 @@
     font-size: 12.5px; color: var(--navy);
     font-style: italic;
   }
+  /* Multi-select checklist used in the New rule modal so admins can
+     exclude several slides for a single option in one go. Scrollable
+     when many slides are active. */
+  .qn-slide-checklist {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 260px; overflow-y: auto;
+    padding: 6px; background: var(--white);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .qn-slide-row {
+    display: flex !important; flex-direction: row !important;
+    align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 4px;
+    font-size: 13px; font-weight: 500; color: var(--navy);
+    cursor: pointer;
+  }
+  .qn-slide-row:hover { background: var(--bg); }
+  .qn-slide-row.disabled {
+    color: var(--mid); cursor: default; background: var(--bg);
+  }
+  .qn-slide-row.disabled:hover { background: var(--bg); }
+  .qn-slide-row input[type="checkbox"] { margin: 0; }
+  .qn-slide-row-hint {
+    font-size: 10.5px; color: var(--mid); letter-spacing: 0.4px;
+    margin-left: auto; text-transform: uppercase; font-weight: 600;
+  }
 
   /* ── SLIDE EDITOR (Footwear admin, Section 3 Phase B) ── */
 

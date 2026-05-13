@@ -593,24 +593,27 @@
         }).join('')
       + '</select>';
 
-    var slidesSelect = '<select id="add-r-slide">'
+    // Build a checklist of every active slide. Each row is a label
+    // wrapping a checkbox so the whole row is clickable. The actual
+    // checked / disabled state is decided by syncForOption() once the
+    // modal is in the DOM, because it depends on the currently-selected
+    // option and the existing rules in state.
+    var slidesList = '<div class="qn-slide-checklist" id="add-r-slides">'
       + activeSlides.map(function (s) {
-          return '<option value="' + escapeAttr(s.id) + '">' + escapeHtml(s.title) + '</option>';
+          return '<label class="qn-slide-row" data-slide-id="' + escapeAttr(s.id) + '">'
+               +   '<input type="checkbox" class="add-r-slide" value="' + escapeAttr(s.id) + '">'
+               +   '<span>' + escapeHtml(s.title) + '</span>'
+               +   '<span class="qn-slide-row-hint" hidden>Already excluded</span>'
+               + '</label>';
         }).join('')
-      + '</select>';
+      + '</div>';
 
     openModal(''
       + '<h3>New rule</h3>'
-      + '<p>Tie one option to one slide. When the customer picks the option, the deck will include or exclude the slide.</p>'
+      + '<p>Pick the option, then check every slide the deck should exclude when the customer picks that option.</p>'
       + '<div class="qn-form">'
       +   '<label>When the user picks' + optionsSelect + '</label>'
-      +   '<label>Action'
-      +     '<select id="add-r-action">'
-      +       '<option value="exclude_slide">exclude slide</option>'
-      +       '<option value="include_slide">include slide</option>'
-      +     '</select>'
-      +   '</label>'
-      +   '<label>Slide' + slidesSelect + '</label>'
+      +   '<label>Exclude these slides' + slidesList + '</label>'
       +   '<div id="add-r-preview" class="qn-rule-preview"></div>'
       + '</div>'
       + '<div class="modal-actions">'
@@ -618,51 +621,107 @@
       +   '<button class="btn btn-primary" data-fw-action="commitAddRule" data-question-id="' + escapeAttr(qid) + '">Create rule</button>'
       + '</div>');
 
+    // Update the row state for the currently selected option:
+    // slides that already have an exclude rule for this option are
+    // pre-checked AND disabled so the admin can see them but can't
+    // accidentally duplicate. The "Already excluded" hint surfaces
+    // beside those rows.
+    function syncForOption() {
+      var optEl = document.getElementById('add-r-option');
+      var optionId = optEl.value;
+      var existing = new Set(state.rules
+        .filter(function (r) { return r.option_id === optionId && r.action === 'exclude_slide'; })
+        .map(function (r) { return r.slide_id; }));
+      document.querySelectorAll('#add-r-slides .qn-slide-row').forEach(function (row) {
+        var slideId = row.getAttribute('data-slide-id');
+        var cb      = row.querySelector('input[type="checkbox"]');
+        var hint    = row.querySelector('.qn-slide-row-hint');
+        if (existing.has(slideId)) {
+          cb.checked  = true;
+          cb.disabled = true;
+          row.classList.add('disabled');
+          if (hint) hint.hidden = false;
+        } else {
+          cb.disabled = false;
+          row.classList.remove('disabled');
+          if (hint) hint.hidden = true;
+          // Don't auto-uncheck user-set checkboxes; only reset state
+          // for rows that just changed disability.
+        }
+      });
+    }
+
     function updatePreview() {
       var optEl = document.getElementById('add-r-option');
-      var actEl = document.getElementById('add-r-action');
-      var sldEl = document.getElementById('add-r-slide');
       var optText = optEl.options[optEl.selectedIndex].text;
-      var actText = actEl.value === 'include_slide' ? 'include' : 'exclude';
-      var sldText = sldEl.options[sldEl.selectedIndex].text;
+      // Only count checkboxes the user can actually act on (skip the
+      // pre-checked + disabled ones, which represent existing rules
+      // and won't be re-inserted on submit).
+      var picks = Array.from(document.querySelectorAll('#add-r-slides input.add-r-slide'))
+        .filter(function (cb) { return cb.checked && !cb.disabled; });
+      var summary;
+      if (picks.length === 0) {
+        summary = '(no new slides selected)';
+      } else if (picks.length === 1) {
+        summary = 'slide ' + picks[0].parentElement.querySelector('span').textContent;
+      } else {
+        summary = picks.length + ' slides';
+      }
       document.getElementById('add-r-preview').textContent =
-        'When user picks ' + optText + ', the deck will ' + actText + ' slide ' + sldText + '.';
+        'When user picks ' + optText + ', the deck will exclude ' + summary + '.';
     }
-    document.getElementById('add-r-option').addEventListener('change', updatePreview);
-    document.getElementById('add-r-action').addEventListener('change', updatePreview);
-    document.getElementById('add-r-slide').addEventListener('change', updatePreview);
+
+    document.getElementById('add-r-option').addEventListener('change', function () {
+      syncForOption();
+      updatePreview();
+    });
+    document.querySelectorAll('#add-r-slides input.add-r-slide').forEach(function (cb) {
+      cb.addEventListener('change', updatePreview);
+    });
+    syncForOption();
     updatePreview();
   }
 
   async function commitAddRule(qid) {
     var optionId = document.getElementById('add-r-option').value;
-    var action   = document.getElementById('add-r-action').value;
-    var slideId  = document.getElementById('add-r-slide').value;
-
-    if (!optionId || !action || !slideId) {
-      toast('Pick an option, an action, and a slide.', 'error');
+    if (!optionId) {
+      toast('Pick an option.', 'error');
+      return;
+    }
+    // Pull every checked-and-enabled checkbox. Disabled boxes represent
+    // rules that already exist for this option and would only trip the
+    // unique-index error, so we skip them here.
+    var picks = Array.from(document.querySelectorAll('#add-r-slides input.add-r-slide'))
+      .filter(function (cb) { return cb.checked && !cb.disabled; })
+      .map(function (cb) { return cb.value; });
+    if (picks.length === 0) {
+      toast('Check at least one slide to exclude.', 'error');
       return;
     }
 
-    var res = await supa.from('footwear_question_rules').insert({
-      question_id: qid,
-      option_id:   optionId,
-      action:      action,
-      slide_id:    slideId,
+    var rows = picks.map(function (slideId) {
+      return {
+        question_id: qid,
+        option_id:   optionId,
+        action:      'exclude_slide',
+        slide_id:    slideId
+      };
     });
+    var res = await supa.from('footwear_question_rules').insert(rows);
     if (res.error) {
-      // The DB has a unique index on (option_id, slide_id) which catches
-      // include + exclude (or duplicate) rules on the same pair. Translate
-      // the constraint error into something readable.
+      // The DB has a unique index on (option_id, slide_id). If a
+      // duplicate slips through (race against another admin or stale
+      // state), translate the constraint error into something the
+      // admin can act on.
       if (res.error.code === '23505') {
-        toast('That option already has a rule for that slide. Delete the existing rule first.', 'error');
+        toast('One of those slides already has a rule for this option. Refresh and try again.', 'error');
       } else {
         toast(prettyDbError(res.error, 'Could not create rule.'), 'error');
       }
       return;
     }
     closeModal();
-    toast('Rule created.', 'success');
+    toast(rows.length === 1 ? 'Rule created.' : (rows.length + ' rules created.'), 'success');
     await render();
   }
 
