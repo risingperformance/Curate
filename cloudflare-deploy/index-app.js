@@ -439,10 +439,11 @@ async function loadDashboardSideData() {
     const list = window._dashTopProducts[r.category];
     if (!list) return;
     list.push({
-      name:  r.product_name || '(unnamed)',
-      sub:   r.colour || '',
-      sku:   r.sku || '',
-      units: Number(r.units || 0)
+      name:     r.product_name || '(unnamed)',
+      sub:      r.colour || '',
+      sku:      r.sku || '',
+      base_sku: r.base_sku || r.sku || '',
+      units:    Number(r.units || 0)
     });
   });
   // Prefer the client-side footwear ranking when the RPC didn't
@@ -555,11 +556,12 @@ async function fetchTopFootwearProducts(openFootwearSeason) {
   });
   if (!unitsById.size) return [];
 
-  // Join to products for sku / name / colour. Only fetch the ids we
-  // actually saw in cart_items so we don't pull the whole catalogue.
+  // Join to products for sku / name / colour. base_sku drives the
+  // image URL (footwear images are named after the base style, not the
+  // width-specific variant SKU), so pull that too.
   const ids = Array.from(unitsById.keys());
   const prodRes = await supa.from('products')
-    .select('id, sku, product_name, colour')
+    .select('id, sku, base_sku, product_name, colour')
     .in('id', ids);
   if (prodRes.error) {
     console.warn('Top footwear products join failed:', prodRes.error);
@@ -573,10 +575,11 @@ async function fetchTopFootwearProducts(openFootwearSeason) {
     .map(id => {
       const p = byId[id] || {};
       return {
-        name:  p.product_name || '(unnamed)',
-        sub:   p.colour || '',
-        sku:   p.sku || '',
-        units: unitsById.get(id)
+        name:     p.product_name || '(unnamed)',
+        sub:      p.colour || '',
+        sku:      p.sku || '',
+        base_sku: p.base_sku || p.sku || '',
+        units:    unitsById.get(id)
       };
     })
     .sort((a, b) => b.units - a.units)
@@ -593,7 +596,11 @@ function renderTopProducts(cat) {
   }
   const PRODUCT_IMG_BASE = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/product-images/';
   list.innerHTML = top.map((p, i) => {
-    const imgUrl = p.sku ? PRODUCT_IMG_BASE + 'FJ_' + encodeURIComponent(p.sku) + '_01.jpg' : '';
+    // Image files are named after the base style (e.g. FJ_56949_01.jpg),
+    // not the width-specific variant SKU (e.g. 56949W). Prefer base_sku
+    // and fall back to sku for apparel rows where variants don't apply.
+    const imgKey = p.base_sku || p.sku;
+    const imgUrl = imgKey ? PRODUCT_IMG_BASE + 'FJ_' + encodeURIComponent(imgKey) + '_01.jpg' : '';
     return `
     <div class="dash-prow">
       <div class="dash-prank">${i + 1}</div>

@@ -3012,7 +3012,7 @@ async function generateCustomerPDF() {
   .v1-logo-bar{display:flex;align-items:center;justify-content:space-between;padding:0 0 14px;}
   .v1-logo-fj{height:32px;}
   .v1-logo-curate{height:20px;}
-  .v1-banner-wrap{position:relative;width:100%;height:130px;overflow:hidden;margin-bottom:0;}
+  .v1-banner-wrap{position:relative;width:100%;height:130px;overflow:hidden;margin-bottom:0;background:${NAVY};}
   .v1-banner-img{width:100%;height:100%;object-fit:cover;display:block;}
   .v1-banner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;
     background:linear-gradient(to right,rgba(0,0,0,0.6) 0%,rgba(0,0,0,0.2) 50%,transparent 100%);
@@ -3085,14 +3085,18 @@ async function generateCustomerPDF() {
 
 <div class="fpdf-root">
   <!-- ── Logo bar ── -->
+  <!-- crossorigin removed during May 2026 PDF banner fix: window.print()
+       doesn't need CORS-clean images, and the supabase-storage CORS
+       headers for these buckets are inconsistent, which silently
+       breaks the load. -->
   <div class="v1-logo-bar">
-    <img class="v1-logo-fj" src="${fjLogoBlack}" crossorigin="anonymous" />
-    <img class="v1-logo-curate" src="${curateLogoBlack}" crossorigin="anonymous" />
+    <img class="v1-logo-fj" src="${fjLogoBlack}" />
+    <img class="v1-logo-curate" src="${curateLogoBlack}" />
   </div>
 
   <!-- ── Seasonal banner with overlaid text ── -->
   <div class="v1-banner-wrap">
-    <img class="v1-banner-img" src="${bannerImg}" crossorigin="anonymous" data-img-fallback="banner" data-season-id="${escapeAttr(seasonId)}" />
+    <img class="v1-banner-img" src="${bannerImg}" data-img-fallback="banner" data-season-id="${escapeAttr(seasonId)}" />
     <div class="v1-banner-overlay">
       <div class="v1-banner-text">
         <div class="v1-banner-title">Apparel Prebook Order</div>
@@ -3107,7 +3111,7 @@ async function generateCustomerPDF() {
       <div class="v1-info-lbl">Partner</div>
       <div class="v1-group-row">
         <div class="v1-info-val">${escapeHtml(account)}</div>
-        ${groupLogoUrl ? `<img class="v1-group-logo" src="${groupLogoUrl}" crossorigin="anonymous" data-img-fallback="hide" />` : ''}
+        ${groupLogoUrl ? `<img class="v1-group-logo" src="${groupLogoUrl}" data-img-fallback="hide" />` : ''}
       </div>
     </div>
     <div class="v1-info-cell">
