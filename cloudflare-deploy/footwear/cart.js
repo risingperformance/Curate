@@ -537,6 +537,13 @@
   }
 
   // ── Review modal ────────────────────────────────────────────────────────
+  // Mirrors the apparel review layout (May 2026 parity pass): orders are
+  // grouped by delivery month, then by silo (Athletic / Classic /
+  // Other), and each (product, width) combination becomes a single row
+  // with the sizes ordered, units, WS price, RRP, and line total.
+  // Per-month subtotals and a grand total at the bottom give the rep a
+  // quick read on the order before submitting. Read-only by design;
+  // "Keep editing" returns the rep to the cart for adjustments.
   async function openReview() {
     var c = window.fwApp;
     if (count() === 0) {
@@ -544,11 +551,14 @@
       return;
     }
 
-    // Look up product details for every line
+    // Pull the richer product columns we need for the rebuilt review:
+    // delivery_months for month grouping, silo/energy/exclusive for
+    // badges, and country-aware pricing for WS / RRP figures.
     var ids = [];
     items().forEach(function (it) { if (ids.indexOf(it.product_id) < 0) ids.push(it.product_id); });
-    // product_name is the actual column; alias to name for the JS view code.
-    var prodRes = await c.supa.from('products').select('id, sku, name:product_name, width').in('id', ids);
+    var prodRes = await c.supa.from('products')
+      .select('id, sku, base_sku, name:product_name, silo, energy, exclusive, outsole, delivery_months, aud_ws_price, aud_rrp_price, nzd_ws_price, nzd_rrp_price')
+      .in('id', ids);
     if (prodRes.error) {
       c.toast('Could not load product details: ' + prodRes.error.message, 'error');
       return;
@@ -556,74 +566,197 @@
     var byId = {};
     (prodRes.data || []).forEach(function (p) { byId[p.id] = p; });
 
-    var rowsHtml = items().map(function (it, idx) {
-      var p = byId[it.product_id];
-      var name = p ? (p.name || p.sku || it.product_id) : it.product_id;
-      var sku  = p ? p.sku : '';
-      var widthLabel = it.width ? ('Width ' + it.width) : '';
-      return ''
-        + '<tr>'
-        +   '<td class="rev-name"><b>' + c.escapeHtml(name) + '</b><br><span class="rev-sku">' + c.escapeHtml(sku) + '</span></td>'
-        +   '<td>' + c.escapeHtml(it.size || '-') + '</td>'
-        +   '<td>' + c.escapeHtml(widthLabel || '-') + '</td>'
-        +   '<td>'
-        +     '<input type="number" class="rev-qty" min="0" step="1" inputmode="numeric" value="' + (Number(it.quantity) || 0) + '"'
-        +     ' data-fw-cart="rev-qty" data-idx="' + idx + '">'
-        +   '</td>'
-        +   '<td>'
-        +     '<button class="btn btn-sm" data-fw-cart="rev-remove" data-idx="' + idx + '">Remove</button>'
-        +   '</td>'
-        + '</tr>';
-    }).join('');
+    // Resolve display context: customer header line + currency.
+    var customer = c.state.customer || {};
+    var currencyCode = ((c.state.currentUser && c.state.currentUser.country) || 'AUD').toUpperCase() === 'NZD' ? 'NZD' : 'AUD';
+    var dateLabel = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    openModalRaw(''
+    // ── Group: month -> silo -> (product_id, width) -> aggregated row ──
+    function normalizeMonths(v) {
+      if (!v) return [];
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      return [String(v)].filter(Boolean);
+    }
+    var MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,january:1,february:2,march:3,april:4,june:6,july:7,august:8,september:9,october:10,november:11,december:12 };
+    function monthSortKey(label) {
+      if (!label) return 9999999;
+      var m = /([a-z]+)\s*(\d{4})/i.exec(label);
+      if (!m) return 9999999;
+      var name = m[1].toLowerCase();
+      var month = MONTHS[name] || MONTHS[name.slice(0, 3)];
+      if (!month) return 9999999;
+      return parseInt(m[2], 10) * 100 + month;
+    }
+    function siloRank(s) {
+      if (s === 'Athletic') return 1;
+      if (s === 'Classic')  return 2;
+      return 3;
+    }
+
+    var monthMap = {};
+    items().forEach(function (it) {
+      var qty = Number(it.quantity) || 0;
+      if (qty <= 0) return;
+      var p = byId[it.product_id];
+      if (!p) return;
+
+      var months = normalizeMonths(p.delivery_months);
+      var month = months[0] || 'Unscheduled';
+      var silo  = ((it.silo || p.silo || '') + '').trim() || 'Other';
+
+      if (!monthMap[month]) {
+        monthMap[month] = { month: month, sortKey: monthSortKey(month), siloMap: {} };
+      }
+      var mEntry = monthMap[month];
+      if (!mEntry.siloMap[silo]) {
+        mEntry.siloMap[silo] = { silo: silo, groups: {} };
+      }
+      var sEntry = mEntry.siloMap[silo];
+
+      var gkey = it.product_id + '::' + (it.width || '');
+      if (!sEntry.groups[gkey]) {
+        sEntry.groups[gkey] = {
+          product:   p,
+          width:     it.width || null,
+          sizes:     {},                            // size -> qty
+          pairs:     0,
+          unitPrice: Number(it.unit_price) || 0,    // snapshot wins
+          energy:    (it.energy != null ? it.energy : p.energy),
+          exclusive: (it.exclusive != null ? it.exclusive : p.exclusive)
+        };
+      }
+      var g = sEntry.groups[gkey];
+      var sizeKey = it.size || '-';
+      g.sizes[sizeKey] = (g.sizes[sizeKey] || 0) + qty;
+      g.pairs += qty;
+    });
+
+    var monthGroups = Object.values(monthMap)
+      .sort(function (a, b) { return a.sortKey - b.sortKey; })
+      .map(function (mEntry) {
+        return {
+          month: mEntry.month,
+          silos: Object.values(mEntry.siloMap)
+            .sort(function (a, b) {
+              return siloRank(a.silo) - siloRank(b.silo) || a.silo.localeCompare(b.silo);
+            })
+            .map(function (sEntry) {
+              return { silo: sEntry.silo, groups: Object.values(sEntry.groups) };
+            })
+        };
+      });
+
+    // ── Render ────────────────────────────────────────────────────────────
+    var grandPairs = 0, grandValue = 0;
+    var html = ''
       + '<div class="modal-card review-modal">'
-      +   '<div class="picker-head">'
+      +   '<div class="review-modal-header">'
       +     '<div class="picker-eyebrow">Review your order</div>'
       +     '<div class="picker-title">AW27 Footwear</div>'
+      +     '<div class="review-order-meta">'
+      +       '<span><strong>Account:</strong> ' + c.escapeHtml(customer.account_name || '-') + '</span>'
+      +       '<span><strong>Manager:</strong> ' + c.escapeHtml(customer.account_manager || '-') + '</span>'
+      +       '<span><strong>' + c.escapeHtml(dateLabel) + '</strong></span>'
+      +       '<span><strong>Currency:</strong> ' + currencyCode + '</span>'
+      +     '</div>'
       +   '</div>'
-      +   '<div class="review-table-wrap">'
-      +     '<table class="review-table">'
-      +       '<thead><tr>'
-      +         '<th>Product</th><th>Size</th><th>Width</th><th>Qty</th><th></th>'
-      +       '</tr></thead>'
-      +       '<tbody>' + rowsHtml + '</tbody>'
-      +     '</table>'
-      +   '</div>'
-      +   '<div class="review-totals">'
-      +     '<span>Total products: <b>' + lineCount() + '</b></span>'
-      +     '<span>Total pairs: <b>' + count() + '</b></span>'
-      +   '</div>'
-      +   '<div class="picker-actions">'
-      +     '<button class="btn btn-outline" data-fw-cart="picker-cancel">Keep editing</button>'
-      +     '<button class="btn btn-primary" data-fw-cart="rev-submit">Submit order</button>'
-      +   '</div>'
-      + '</div>');
+      +   '<div class="review-modal-scroll">';
+
+    monthGroups.forEach(function (m) {
+      var monthPairs = 0, monthValue = 0;
+      html += '<div class="review-month-heading">' + c.escapeHtml(m.month) + '</div>';
+
+      m.silos.forEach(function (silo) {
+        html += '<div class="review-subsection-heading">' + c.escapeHtml(silo.silo) + '</div>';
+        html += '<table class="review-table">'
+             +   '<thead><tr>'
+             +     '<th>Product</th>'
+             +     '<th>SKU</th>'
+             +     '<th>Width</th>'
+             +     '<th>Sizes Ordered</th>'
+             +     '<th style="text-align:right">Pairs</th>'
+             +     '<th style="text-align:right">WS</th>'
+             +     '<th style="text-align:right">RRP</th>'
+             +     '<th style="text-align:right">Line Total</th>'
+             +   '</tr></thead>'
+             +   '<tbody>';
+
+        silo.groups.forEach(function (g) {
+          var p = g.product;
+          // Country-aware live prices, falling back to the cart-line
+          // snapshot when the live row is missing the relevant column.
+          var wsLive  = currencyCode === 'NZD' ? Number(p.nzd_ws_price)  : Number(p.aud_ws_price);
+          var rrpLive = currencyCode === 'NZD' ? Number(p.nzd_rrp_price) : Number(p.aud_rrp_price);
+          var ws  = isFinite(wsLive)  && wsLive  > 0 ? wsLive  : g.unitPrice;
+          var rrp = isFinite(rrpLive) && rrpLive > 0 ? rrpLive : 0;
+          var lineTotal = ws * g.pairs;
+          monthPairs += g.pairs;
+          monthValue += lineTotal;
+
+          // Sizes formatted as "8 x 2  9 x 1  10.5 x 3", sorted by
+          // numeric size when possible.
+          var sortedSizes = Object.keys(g.sizes).sort(function (a, b) {
+            var an = parseFloat(a), bn = parseFloat(b);
+            if (isNaN(an) || isNaN(bn)) return String(a).localeCompare(String(b));
+            return an - bn;
+          });
+          var sizeStr = sortedSizes
+            .map(function (s) { return s + ' x ' + g.sizes[s]; })
+            .join('   ');
+
+          var energyBadge = isEnergyOn(g.energy)
+            ? ' <span class="review-energy-badge">Energy</span>' : '';
+          var exclusiveBadge = g.exclusive
+            ? ' <span class="review-exclusive-badge">' + c.escapeHtml(g.exclusive) + '</span>' : '';
+
+          html += '<tr>'
+               +   '<td class="rev-name"><strong>' + c.escapeHtml(p.name || p.sku || '-') + '</strong>' + energyBadge + exclusiveBadge + '</td>'
+               +   '<td><span class="rev-sku">' + c.escapeHtml(p.sku || '-') + '</span></td>'
+               +   '<td>' + c.escapeHtml(g.width || '-') + '</td>'
+               +   '<td style="white-space:nowrap;letter-spacing:0.5px">' + c.escapeHtml(sizeStr) + '</td>'
+               +   '<td style="text-align:right">' + g.pairs + '</td>'
+               +   '<td style="text-align:right">$' + ws.toFixed(2) + '</td>'
+               +   '<td style="text-align:right">' + (rrp > 0 ? '$' + rrp.toFixed(2) : '-') + '</td>'
+               +   '<td style="text-align:right"><strong>$' + lineTotal.toFixed(2) + '</strong></td>'
+               + '</tr>';
+        });
+
+        html += '</tbody></table>';
+      });
+
+      html += '<div class="review-month-subtotal">'
+           +   '<span>' + c.escapeHtml(m.month) + ' subtotal</span>'
+           +   '<span><strong>' + monthPairs + '</strong> pairs &middot; <strong>' + currencyCode + ' $' + monthValue.toFixed(2) + '</strong></span>'
+           + '</div>';
+
+      grandPairs += monthPairs;
+      grandValue += monthValue;
+    });
+
+    html += '<table class="review-table review-grand-total">'
+         +   '<tfoot><tr>'
+         +     '<td colspan="4" style="text-align:right">Grand total</td>'
+         +     '<td style="text-align:right">' + grandPairs + '</td>'
+         +     '<td></td><td></td>'
+         +     '<td style="text-align:right">' + currencyCode + ' $' + grandValue.toFixed(2) + '</td>'
+         +   '</tr></tfoot>'
+         + '</table>';
+
+    html += '</div>'  // close review-modal-scroll
+         + '<div class="review-totals">'
+         +   '<span>Total products: <b>' + lineCount() + '</b></span>'
+         +   '<span>Total pairs: <b>' + grandPairs + '</b></span>'
+         + '</div>'
+         + '<div class="picker-actions">'
+         +   '<button class="btn btn-outline" data-fw-cart="picker-cancel">Keep editing</button>'
+         +   '<button class="btn btn-primary" data-fw-cart="rev-submit">Submit order</button>'
+         + '</div>'
+         + '</div>';  // close review-modal
+
+    openModalRaw(html);
 
     var modal = document.getElementById('app-modal');
     if (!modal) return;
-
-    modal.querySelectorAll('[data-fw-cart="rev-qty"]').forEach(function (input) {
-      input.addEventListener('change', function () {
-        var idx = parseInt(input.dataset.idx, 10);
-        var qty = parseInt(input.value, 10) || 0;
-        var line = items()[idx];
-        if (!line) return;
-        setQuantity(line.product_id, line.size, line.width, qty);
-        if (qty <= 0) {
-          openReview();   // re-render after removal
-        }
-      });
-    });
-    modal.querySelectorAll('[data-fw-cart="rev-remove"]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var idx = parseInt(btn.dataset.idx, 10);
-        var line = items()[idx];
-        if (!line) return;
-        remove(line.product_id, line.size, line.width);
-        openReview();
-      });
-    });
     modal.querySelector('[data-fw-cart="picker-cancel"]').addEventListener('click', closeModalRaw);
     modal.querySelector('[data-fw-cart="rev-submit"]').addEventListener('click', submit);
   }

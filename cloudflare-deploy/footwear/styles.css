@@ -1281,7 +1281,7 @@ body.fw-footer-visible #app-main { padding-bottom: 96px; }
 }
 .modal-card.picker-modal,
 .modal-card.review-modal { max-width: 560px; }
-.modal-card.review-modal { max-width: 720px; }
+.modal-card.review-modal { max-width: 960px; max-height: 88vh; display: flex; flex-direction: column; }
 
 .picker-head { margin-bottom: 14px; }
 .picker-eyebrow {
@@ -1382,6 +1382,99 @@ body.fw-footer-visible #app-main { padding-bottom: 96px; }
   display: flex; justify-content: space-between; gap: 12px;
   margin-bottom: 18px;
   font-size: 13px; color: var(--fj-mid);
+}
+
+/* ── Review modal v2 (May 2026 parity with apparel review) ──────────────
+   Modal grows to ~960px and uses a fixed header + scrollable middle so
+   the customer / manager / currency line stays visible while the rep
+   scrolls through long orders. Each delivery month becomes a heading
+   with athletic / classic silos beneath, mirroring how apparel groups
+   by month then subsection. */
+.review-modal-header {
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--fj-border);
+  flex-shrink: 0;
+}
+.review-order-meta {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  margin-top: 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  color: var(--fj-mid);
+  letter-spacing: 0.5px;
+}
+.review-order-meta strong { color: var(--fj-navy); }
+.review-modal-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0 12px;
+}
+.review-month-heading {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--fj-navy);
+  margin: 22px 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--fj-navy);
+}
+.review-subsection-heading {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--fj-mid);
+  margin: 12px 0 4px;
+}
+.review-month-subtotal {
+  display: flex; justify-content: space-between;
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: var(--fj-light);
+  border: 1px solid var(--fj-border);
+  border-radius: 6px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; letter-spacing: 0.5px;
+  color: var(--fj-mid);
+}
+.review-month-subtotal strong { color: var(--fj-navy); }
+.review-grand-total {
+  margin-top: 18px;
+  border: 2px solid var(--fj-navy);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.review-grand-total td {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 1px;
+  background: var(--fj-light);
+  border-bottom: 0;
+}
+/* Small inline badges for Energy / Exclusive flags on the product cell. */
+.review-energy-badge,
+.review-silo-badge,
+.review-exclusive-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  vertical-align: middle;
+}
+.review-energy-badge {
+  background: #fff4d6; color: #8a5a00;
+  border: 1px solid #f0d680;
+}
+.review-exclusive-badge {
+  background: #f0e6ff; color: #5b21b6;
+  border: 1px solid #d6c4ff;
+}
+.review-silo-badge {
+  background: var(--fj-light); color: var(--fj-mid);
+  border: 1px solid var(--fj-border);
 }
 
 /* ─── REVIEW MODE (Section 5.2) ───────────────────────────────────────── */
