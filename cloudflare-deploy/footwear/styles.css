@@ -1657,12 +1657,23 @@ body.fw-mode-review .ss-cta { display: none !important; }
 }
 /* Three-button action row on the submitted screen: Return home,
    Save PDF (both outline), Start another order (primary).
-   Wraps on narrow screens so the buttons stay touch-friendly. */
+   Wraps on narrow screens so the buttons stay touch-friendly.
+   The card has a white background, so the default .btn-outline
+   (white-on-transparent) would render invisibly — repaint to navy
+   text on a hairline border, matching .summary-actions. */
 .submitted-actions {
   display: flex; flex-wrap: wrap; gap: 10px;
   justify-content: center;
   margin-top: 4px;
 }
+.submitted-actions .btn { padding: 12px 22px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+.submitted-actions .btn-outline {
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  color: var(--fj-navy);
+}
+.submitted-actions .btn-outline:hover { background: var(--fj-light); color: var(--fj-navy); }
+.submitted-actions .btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 700px) {
   .deck-shell { height: calc(100vh - 200px); min-height: 360px; }
