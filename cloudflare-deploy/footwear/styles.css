@@ -1351,6 +1351,21 @@ body.fw-footer-visible #app-main { padding-bottom: 96px; }
 }
 .picker-actions {
   display: flex; gap: 10px; justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* The review modal sits on a white card, so the default .btn-outline
+   (white text on transparent) would render invisibly. Repaint to navy
+   text on a hairline border, matching .submitted-actions. */
+.review-modal .picker-actions .btn-outline {
+  background: transparent;
+  border: 1px solid var(--fj-border);
+  color: var(--fj-navy);
+}
+.review-modal .picker-actions .btn-outline:hover {
+  background: var(--fj-light); color: var(--fj-navy);
+}
+.review-modal .picker-actions .btn-outline:disabled {
+  opacity: 0.5; cursor: not-allowed;
 }
 
 /* Review modal */

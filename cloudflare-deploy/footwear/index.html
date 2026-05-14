@@ -163,6 +163,14 @@
       padding: 0 !important;
       background: white !important;
     }
+    /* Preserve background fills (navy month banner, red NEW pill,
+       chip backgrounds) when the browser renders the print preview.
+       Without this, Chrome/Safari strip backgrounds to save ink. */
+    #print-container,
+    #print-container * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     @page { margin: 12mm; }
   }
 </style>

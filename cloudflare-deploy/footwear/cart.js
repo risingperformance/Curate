@@ -749,6 +749,7 @@
          + '</div>'
          + '<div class="picker-actions">'
          +   '<button class="btn btn-outline" data-fw-cart="picker-cancel">Keep editing</button>'
+         +   '<button class="btn btn-outline" data-fw-cart="rev-pdf">Save PDF</button>'
          +   '<button class="btn btn-primary" data-fw-cart="rev-submit">Submit order</button>'
          + '</div>'
          + '</div>';  // close review-modal
@@ -759,6 +760,25 @@
     if (!modal) return;
     modal.querySelector('[data-fw-cart="picker-cancel"]').addEventListener('click', closeModalRaw);
     modal.querySelector('[data-fw-cart="rev-submit"]').addEventListener('click', submit);
+
+    // Save PDF from within the review modal. Same generator the
+    // submitted screen uses. The modal stays open while the print
+    // dialog runs so the rep can print, dismiss, then decide whether
+    // to keep editing or submit.
+    var pdfBtn = modal.querySelector('[data-fw-cart="rev-pdf"]');
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', function () {
+        pdfBtn.disabled = true;
+        var oldLbl = pdfBtn.textContent;
+        pdfBtn.textContent = 'Preparing PDF...';
+        generateCustomerPDF().catch(function (e) {
+          window.fwApp.toast('Could not build PDF: ' + ((e && e.message) || 'unknown'), 'error');
+        }).then(function () {
+          pdfBtn.disabled = false;
+          pdfBtn.textContent = oldLbl;
+        });
+      });
+    }
   }
 
   // ── Email body builder ──────────────────────────────────────────────────
