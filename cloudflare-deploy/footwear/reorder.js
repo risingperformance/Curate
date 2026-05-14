@@ -163,16 +163,39 @@
     // The list + the removed-slides block share the left column so the
     // left column is the only thing that scrolls. The preview pane on
     // the right and the action bar at the bottom stay in view.
-    var bodyHtml = order.length === 0
-      ? '<div class="placeholder-card"><div class="placeholder-card-body">All slides have been removed. Restore at least one to start the presentation.</div></div>'
-      : ''
-        + '<div class="r-shell">'
-        +   '<div class="r-list-col">'
-        +     '<div class="r-list" id="r-list">' + cardsHtml + '</div>'
-        +     removedHtml
-        +   '</div>'
-        +   '<aside class="r-preview" id="r-preview">' + renderPreviewHtml(order) + '</aside>'
-        + '</div>';
+    //
+    // When every active slide has been removed, the placeholder swaps
+    // in for the drag list but the removed-slides section stays in
+    // place so the rep can restore at least one. The footer's Browse
+    // catalogue button is the other escape hatch.
+    var emptyCopy = excluded.length > 0
+      ? 'All slides have been removed. Restore one below to start the presentation, or jump straight into the full catalogue to build the order.'
+      : 'There are no slides in the deck yet. Jump into the catalogue to build the order, or head back to the questionnaire.';
+    var emptyHtml = ''
+      + '<div class="placeholder-card">'
+      +   '<div class="placeholder-card-title">No slides to show</div>'
+      +   '<p class="placeholder-card-body">' + emptyCopy + '</p>'
+      + '</div>';
+
+    var bodyHtml = ''
+      + '<div class="r-shell">'
+      +   '<div class="r-list-col">'
+      +     (order.length === 0
+            ? emptyHtml
+            : '<div class="r-list" id="r-list">' + cardsHtml + '</div>')
+      +     removedHtml
+      +   '</div>'
+      +   '<aside class="r-preview" id="r-preview">' + renderPreviewHtml(order) + '</aside>'
+      + '</div>';
+
+    // The Browse catalogue button is suppressed in review mode (the
+    // customer can't build an order). In rep mode it's always
+    // available so the rep can skip the deck and go straight to
+    // building the cart, even if every slide has been removed.
+    var showCatBtn = !c.state.reviewMode;
+    var catBtnHtml = showCatBtn
+      ? '<button class="r-footer-cat" id="r-cat-btn">Browse catalogue</button>'
+      : '';
 
     panel.innerHTML = ''
       + '<div class="qx-intro">'
@@ -185,7 +208,10 @@
       +     '<span class="r-footer-back-icon" aria-hidden="true">&larr;</span>'
       +     '<span>Back to questionnaire</span>'
       +   '</button>'
-      +   '<button class="r-footer-start" id="r-start-btn"' + (order.length === 0 ? ' disabled' : '') + '>Start presentation</button>'
+      +   '<div class="r-footer-right">'
+      +     catBtnHtml
+      +     '<button class="r-footer-start" id="r-start-btn"' + (order.length === 0 ? ' disabled' : '') + '>Start presentation</button>'
+      +   '</div>'
       + '</div>';
 
     wireListeners();
@@ -298,6 +324,15 @@
 
     var backBtn = document.getElementById('r-back-btn');
     if (backBtn) backBtn.addEventListener('click', confirmBack);
+
+    // Browse catalogue: rep-only escape hatch from the reorder screen.
+    // Lets the rep skip the deck entirely (useful when the questionnaire
+    // produced a deck they don't want, or when every slide has been
+    // removed and they just want to build the cart directly).
+    var catBtn = document.getElementById('r-cat-btn');
+    if (catBtn) catBtn.addEventListener('click', function () {
+      window.fwApp.setView('catalogue');
+    });
   }
 
   // ── Drag-and-drop ──────────────────────────────────────────────────────

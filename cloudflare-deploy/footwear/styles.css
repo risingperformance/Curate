@@ -766,6 +766,24 @@ body.fw-footer-visible:has(#view-deck:not([hidden])) #app-main {
   border-color: var(--fj-navy);
   background: var(--fj-light);
 }
+/* Right-side button cluster: Browse catalogue (secondary) sits to the
+   left of Start presentation (primary). Keeps Back anchored on the
+   left of the footer, action cluster on the right. */
+.r-footer-right {
+  display: inline-flex; align-items: center; gap: 12px;
+}
+.r-footer-cat {
+  background: transparent; color: var(--fj-navy);
+  border: 1px solid var(--fj-navy);
+  padding: 13px 26px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.r-footer-cat:hover { background: var(--fj-navy); color: #fff; }
 .r-footer-start {
   background: var(--fj-navy); color: #fff;
   border: none;
