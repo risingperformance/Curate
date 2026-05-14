@@ -700,9 +700,16 @@
             if (isNaN(an) || isNaN(bn)) return String(a).localeCompare(String(b));
             return an - bn;
           });
+          // Each "size x qty" chunk is wrapped in a span that itself
+          // stays non-breaking — the row can wrap to a second line at
+          // inter-chunk gaps but never mid-chunk. The CSS caps the
+          // column's max-width so wider orders don't push the right-
+          // hand price columns off-screen.
           var sizeStr = sortedSizes
-            .map(function (s) { return s + ' x ' + g.sizes[s]; })
-            .join('   ');
+            .map(function (s) {
+              return '<span class="rev-size-chunk">' + c.escapeHtml(s) + ' x ' + g.sizes[s] + '</span>';
+            })
+            .join(' ');
 
           var energyBadge = isEnergyOn(g.energy)
             ? ' <span class="review-energy-badge">Energy</span>' : '';
@@ -713,7 +720,7 @@
                +   '<td class="rev-name"><strong>' + c.escapeHtml(p.name || p.sku || '-') + '</strong>' + energyBadge + exclusiveBadge + '</td>'
                +   '<td><span class="rev-sku">' + c.escapeHtml(p.sku || '-') + '</span></td>'
                +   '<td>' + c.escapeHtml(g.width || '-') + '</td>'
-               +   '<td style="white-space:nowrap;letter-spacing:0.5px">' + c.escapeHtml(sizeStr) + '</td>'
+               +   '<td class="rev-sizes">' + sizeStr + '</td>'
                +   '<td style="text-align:right">' + g.pairs + '</td>'
                +   '<td style="text-align:right">$' + ws.toFixed(2) + '</td>'
                +   '<td style="text-align:right">' + (rrp > 0 ? '$' + rrp.toFixed(2) : '-') + '</td>'

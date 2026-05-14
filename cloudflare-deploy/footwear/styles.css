@@ -1397,6 +1397,22 @@ body.fw-footer-visible #app-main { padding-bottom: 96px; }
   font-family: 'SF Mono', Consolas, monospace;
   font-size: 11.5px; color: var(--fj-mid);
 }
+/* Sizes-ordered cell: caps at ~300 px and wraps to a second line so
+   wide orders don't push the Pairs / WS / RRP / Line Total columns
+   out of view. Each "size x qty" chunk is wrapped in .rev-size-chunk
+   to keep numbers atomic — a wrap can only happen at the space
+   between chunks, never mid-chunk. */
+.review-table .rev-sizes {
+  max-width: 300px;
+  white-space: normal;
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+}
+.rev-size-chunk {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: 8px;
+}
 .review-table .rev-qty {
   width: 64px; text-align: center;
   border: 1px solid var(--fj-border);
