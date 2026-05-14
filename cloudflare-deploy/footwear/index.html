@@ -142,6 +142,31 @@
 <script src="templates/tabbed_feature_showcase.js"></script>
 <script src="templates/split_story.js"></script>
 <script src="templates/heading_with_media.js"></script>
+<!-- Print container: hidden on screen, exclusive on print. The cart's
+     generateCustomerPDF() injects the order layout into this node and
+     calls window.print(), which the @media print rule lets render
+     full-bleed while every other element on the page is hidden. -->
+<div id="print-container"></div>
+
+<style>
+  #print-container { display: none; }
+  @media print {
+    body > *:not(#print-container) { display: none !important; }
+    #print-container {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      background: white !important;
+    }
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+    }
+    @page { margin: 12mm; }
+  }
+</style>
+
 <script src="templates/three_button_swap.js"></script>
 <script src="templates/four_button_swap.js"></script>
 <script src="templates/title_page.js"></script>

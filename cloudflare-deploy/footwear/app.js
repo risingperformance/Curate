@@ -362,6 +362,23 @@
     window.location.replace('../index.html');
   }
 
+  // Wipe session-scoped order state and route back to the start of the
+  // questionnaire so the rep can build another order without
+  // navigating away or signing out. The customers cache and the
+  // currentUser stay in place so the rep doesn't have to re-pick a
+  // customer or re-authenticate.
+  function resetForNewOrder() {
+    state.activeDraftId        = null;
+    state.activeShareToken     = null;
+    state.questionnaireAnswers = {};
+    state.slideOrder           = [];
+    state.excludedSlideIds     = [];
+    state.cartItems            = [];
+    state.customer             = null;
+    state.currentSlideProducts = [];
+    setView('questionnaire');
+  }
+
   // ── View dispatch ───────────────────────────────────────────────────────
   var ALL_VIEWS = ['questionnaire', 'reorder', 'deck', 'catalogue', 'summary'];
   // Views that mount the cart and want the apparel-style fixed footer.
@@ -561,6 +578,7 @@
   window.fwApp.persistDraft     = persistDraft;
   window.fwApp.canSaveDraft     = canSaveDraft;
   window.fwApp.signOut          = signOut;
+  window.fwApp.resetForNewOrder = resetForNewOrder;
   window.fwApp.EMAIL_EDGE_FN    = EMAIL_EDGE_FN;
   window.fwApp.loadCustomers    = loadCustomers;
   window.fwApp.filterCustomers  = filterCustomers;

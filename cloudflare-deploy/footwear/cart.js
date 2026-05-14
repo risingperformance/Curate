@@ -958,16 +958,413 @@
       +   '<div class="submitted-eyebrow">Order submitted</div>'
       +   '<div class="submitted-title">Thanks. Your selection is on its way.</div>'
       +   '<p class="submitted-body">A confirmation email is sailing toward you. The draft is saved so you can review it later from the dashboard.</p>'
-      +   '<button class="btn btn-primary" data-fw-cart="reset">Start another order</button>'
+      +   '<div class="submitted-actions">'
+      +     '<button class="btn btn-outline" data-fw-cart="home" type="button">Return home</button>'
+      +     '<button class="btn btn-outline" data-fw-cart="save-pdf" type="button">Save PDF</button>'
+      +     '<button class="btn btn-primary" data-fw-cart="reset" type="button">Start another order</button>'
+      +   '</div>'
       + '</div>';
+
+    // Return home: jump to the root landing without signing out. Auth
+    // session persists, so the landing shows the dashboard not the
+    // sign-in screen.
+    var homeBtn = main.querySelector('[data-fw-cart="home"]');
+    if (homeBtn) {
+      homeBtn.addEventListener('click', function () {
+        window.location.assign('../index.html');
+      });
+    }
+
+    // Save PDF: generate the footwear customer PDF and trigger the
+    // browser print dialog. Reads from state.cartItems / state.customer,
+    // which still hold the submitted order at this point (only Start
+    // another order wipes them).
+    var pdfBtn = main.querySelector('[data-fw-cart="save-pdf"]');
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', function () {
+        pdfBtn.disabled = true;
+        var oldLbl = pdfBtn.textContent;
+        pdfBtn.textContent = 'Preparing PDF...';
+        generateCustomerPDF().catch(function (e) {
+          window.fwApp.toast('Could not build PDF: ' + (e && e.message || 'unknown'), 'error');
+        }).then(function () {
+          pdfBtn.disabled = false;
+          pdfBtn.textContent = oldLbl;
+        });
+      });
+    }
+
+    // Start another order: clear session-scoped order state and route
+    // back to the questionnaire (not to login -- the rep stays signed
+    // in for the next order).
     var resetBtn = main.querySelector('[data-fw-cart="reset"]');
     if (resetBtn) {
       resetBtn.addEventListener('click', function () {
-        // Reset session-scoped state by signing out and re-showing login.
-        if (window.fwApp.signOut) window.fwApp.signOut();
+        if (window.fwApp.resetForNewOrder) window.fwApp.resetForNewOrder();
         else window.location.reload();
       });
     }
+  }
+
+  // ── Customer PDF ────────────────────────────────────────────────────────
+  // Mirrors apparel/index-app.js generateCustomerPDF: black FJ + Curate
+  // logos, a seasonal banner with overlaid title, the info bar
+  // (Partner / Account Manager / Order Date / Pairs / Total excl GST /
+  // Total incl GST), then a body grouped by delivery month then
+  // gender (collection name), one strip per product+width with image,
+  // SKU, name, colour, energy/exclusive/width chips, the size grid,
+  // and a per-strip footer with Pairs / WS / RRP / Line Total.
+  //
+  // Reads from state.cartItems + state.customer (still populated on
+  // the submitted screen — only Start another order wipes them). Pulls
+  // product + collection rows live so prices, names, and gender always
+  // reflect the catalogue at print time.
+  async function generateCustomerPDF() {
+    var c = window.fwApp;
+    var customer  = c.state.customer || {};
+    var cartItems = Array.isArray(c.state.cartItems) ? c.state.cartItems : [];
+    if (!customer.account_name) { c.toast('No customer on this order — cannot build PDF.', 'error'); return; }
+    if (cartItems.length === 0)  { c.toast('Cart is empty — nothing to print.', 'error'); return; }
+
+    var ids = [];
+    cartItems.forEach(function (it) {
+      if (it.product_id && ids.indexOf(it.product_id) < 0) ids.push(it.product_id);
+    });
+
+    var prodRes, colsRes;
+    try {
+      var results = await Promise.all([
+        c.supa.from('products').select('id, sku, base_sku, name:product_name, width, silo, energy, exclusive, delivery_months, collection_id, is_new, aud_ws_price, aud_rrp_price, nzd_ws_price, nzd_rrp_price, colour').in('id', ids),
+        c.supa.from('collections').select('collection_id, collection_name').eq('category', 'footwear')
+      ]);
+      prodRes = results[0];
+      colsRes = results[1];
+    } catch (e) {
+      c.toast('Could not load PDF data: ' + ((e && e.message) || 'network'), 'error');
+      return;
+    }
+    if (prodRes.error) { c.toast('Product lookup failed: ' + prodRes.error.message, 'error'); return; }
+    if (colsRes.error) { c.toast('Collections lookup failed: ' + colsRes.error.message, 'error'); return; }
+
+    var prodById     = {};
+    (prodRes.data || []).forEach(function (p) { prodById[p.id] = p; });
+    var colNameById  = {};
+    (colsRes.data || []).forEach(function (col) { colNameById[col.collection_id] = col.collection_name || ''; });
+
+    var currencyCode = ((c.state.currentUser && c.state.currentUser.country) || 'AUD').toUpperCase() === 'NZD' ? 'NZD' : 'AUD';
+    var currSymbol   = currencyCode === 'NZD' ? 'NZ$' : 'A$';
+
+    // Gender rank: Men's first, Women's second, Junior third, anything
+    // else last. Mirrors the catalogue's tabRank so the PDF and the
+    // catalogue display gender in the same order.
+    function genderRank(name) {
+      var n = (name || '').toLowerCase();
+      if (n.indexOf('women')  >= 0) return 1;
+      if (n.indexOf('men')    >= 0) return 0;
+      if (n.indexOf('junior') >= 0) return 2;
+      return 3;
+    }
+    function normalizeMonths(v) {
+      if (!v) return [];
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      return [String(v)].filter(Boolean);
+    }
+    var MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,january:1,february:2,march:3,april:4,june:6,july:7,august:8,september:9,october:10,november:11,december:12 };
+    function monthSortKey(label) {
+      if (!label) return 9999999;
+      var m = /([a-z]+)\s*(\d{4})/i.exec(label);
+      if (!m) return 9999999;
+      var name = m[1].toLowerCase();
+      var month = MONTHS[name] || MONTHS[name.slice(0,3)];
+      if (!month) return 9999999;
+      return parseInt(m[2],10) * 100 + month;
+    }
+
+    // Group: month -> gender -> (product, width) -> sizes / pairs
+    var monthMap = {};
+    cartItems.forEach(function (it) {
+      var qty = Number(it.quantity) || 0;
+      if (qty <= 0) return;
+      var p = prodById[it.product_id];
+      if (!p) return;
+      var months = normalizeMonths(p.delivery_months);
+      var month  = months[0] || 'Unscheduled';
+      var gender = colNameById[p.collection_id] || 'Other';
+      if (!monthMap[month]) monthMap[month] = { month: month, sortKey: monthSortKey(month), genderMap: {} };
+      var mEntry = monthMap[month];
+      if (!mEntry.genderMap[gender]) mEntry.genderMap[gender] = { gender: gender, rank: genderRank(gender), groups: {} };
+      var gEntry = mEntry.genderMap[gender];
+      var gkey   = it.product_id + '::' + (it.width || '');
+      if (!gEntry.groups[gkey]) {
+        gEntry.groups[gkey] = {
+          product:   p,
+          width:     it.width || null,
+          sizes:     {},
+          pairs:     0,
+          unitPrice: Number(it.unit_price) || 0,
+          energy:    (it.energy != null ? it.energy : p.energy),
+          exclusive: (it.exclusive != null ? it.exclusive : p.exclusive)
+        };
+      }
+      var g = gEntry.groups[gkey];
+      var sizeKey = it.size || '-';
+      g.sizes[sizeKey] = (g.sizes[sizeKey] || 0) + qty;
+      g.pairs += qty;
+    });
+
+    var monthGroups = Object.values(monthMap)
+      .sort(function (a, b) { return a.sortKey - b.sortKey; })
+      .map(function (mEntry) {
+        return {
+          month: mEntry.month,
+          genders: Object.values(mEntry.genderMap)
+            .sort(function (a, b) { return a.rank - b.rank || a.gender.localeCompare(b.gender); })
+            .map(function (gEntry) {
+              return { gender: gEntry.gender, groups: Object.values(gEntry.groups) };
+            })
+        };
+      });
+
+    // ── Header data ──────────────────────────────────────────────────────
+    var NAVY            = '#1a2744';
+    var seasonId        = c.state.seasonId || 'AW27-shoe';
+    var seasonClean     = seasonId.replace(/-shoe$/i, '');
+    var seasonPrefix    = seasonClean.replace(/\d+$/, '');
+    var seasonYearMatch = seasonClean.match(/(\d+)$/);
+    var seasonYear      = seasonYearMatch ? parseInt(seasonYearMatch[1], 10) : 0;
+    var seasonLabel     = (seasonPrefix === 'AW' ? 'Autumn / Winter' : 'Spring / Summer') + ' 20' + seasonYear;
+    var bannerImg       = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/seasonal-images/season-' + seasonId + '-banner.jpg';
+    var fjLogoBlack     = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/FJ_logo_FullLockup_HRZ_B.jpg';
+    var curateLogoBlack = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/curate-logo-b.png';
+    var groupName       = customer.group || '';
+    var groupLogoUrl    = groupName ? ('https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/logos/ANZ_' + encodeURIComponent(groupName) + '.jpg') : '';
+
+    var account = customer.account_name    || '—';
+    var manager = customer.account_manager || '—';
+    var dateVal = new Date().toLocaleDateString('en-AU', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+    // ── Build body ──────────────────────────────────────────────────────
+    var bodyHtml   = '';
+    var grandPairs = 0, grandValue = 0;
+    monthGroups.forEach(function (m) {
+      var monthPairs = 0, monthValue = 0;
+      m.genders.forEach(function (gen) {
+        gen.groups.forEach(function (g) {
+          var p = g.product;
+          var wsLive = currencyCode === 'NZD' ? Number(p.nzd_ws_price) : Number(p.aud_ws_price);
+          var unit   = isFinite(wsLive) && wsLive > 0 ? wsLive : g.unitPrice;
+          monthPairs += g.pairs;
+          monthValue += unit * g.pairs;
+        });
+      });
+
+      var mHtml = ''
+        + '<div class="fpdf-month-h">'
+        +   '<span>' + c.escapeHtml(m.month) + ' &nbsp; DELIVERY</span>'
+        +   '<span class="fpdf-month-h-right">' + monthPairs + ' pairs &nbsp;&mdash;&nbsp; ' + currSymbol + monthValue.toFixed(2) + '</span>'
+        + '</div>';
+
+      m.genders.forEach(function (gen) {
+        mHtml += '<div class="fpdf-sub-h">' + c.escapeHtml(gen.gender) + '</div>';
+        gen.groups.forEach(function (g) {
+          var p     = g.product;
+          var wsL   = currencyCode === 'NZD' ? Number(p.nzd_ws_price)  : Number(p.aud_ws_price);
+          var rrpL  = currencyCode === 'NZD' ? Number(p.nzd_rrp_price) : Number(p.aud_rrp_price);
+          var unit  = isFinite(wsL) && wsL > 0 ? wsL : g.unitPrice;
+          var rrp   = isFinite(rrpL) && rrpL > 0 ? rrpL : 0;
+          var lineTotal = unit * g.pairs;
+
+          var imgSrc = PRODUCT_IMG_BASE + 'FJ_' + (p.base_sku || p.sku) + '_01.jpg';
+
+          var sortedSizes = Object.keys(g.sizes).sort(function (a, b) {
+            var an = parseFloat(a), bn = parseFloat(b);
+            if (isNaN(an) || isNaN(bn)) return String(a).localeCompare(String(b));
+            return an - bn;
+          });
+          var sizesHtml = sortedSizes.map(function (s) {
+            return '<div class="strip-size-col">'
+              +   '<div class="strip-size-lbl">' + c.escapeHtml(s) + '</div>'
+              +   '<div class="strip-size-box">' + g.sizes[s] + '</div>'
+              + '</div>';
+          }).join('');
+
+          var newBadge      = p.is_new ? '<span class="new-badge">NEW</span>' : '';
+          var energyChip    = isEnergyOn(g.energy) ? '<span class="energy-chip">Energy</span>' : '';
+          var exclusiveChip = g.exclusive ? '<span class="excl-chip">' + c.escapeHtml(g.exclusive) + '</span>' : '';
+          var widthLabel    = pillLabelFor(g.width);
+          var widthChip     = (widthLabel && widthLabel !== 'Standard') ? '<span class="width-chip">' + c.escapeHtml(widthLabel) + '</span>' : '';
+          var hasChips      = widthChip || energyChip || exclusiveChip;
+
+          mHtml += '<div class="strip">'
+            +   '<img class="strip-img" src="' + c.escapeAttr(imgSrc) + '" data-fw-pdf-fallback="strip">'
+            +   '<div class="strip-body">'
+            +     '<div class="strip-top">'
+            +       '<div class="strip-meta">'
+            +         '<div class="strip-sku">' + c.escapeHtml(p.sku || '') + '</div>'
+            +         '<div class="strip-name-row">' + newBadge + '<div class="strip-name">' + c.escapeHtml(p.name || p.sku || '') + '</div></div>'
+            +         '<div class="strip-colour">' + c.escapeHtml(p.colour || '') + '</div>'
+            +         (hasChips ? '<div class="strip-chips">' + widthChip + energyChip + exclusiveChip + '</div>' : '')
+            +       '</div>'
+            +       '<div class="strip-sizes">' + sizesHtml + '</div>'
+            +     '</div>'
+            +     '<div class="strip-bottom">'
+            +       '<div class="strip-price"><div class="strip-price-lbl">Pairs</div><div class="strip-price-val">' + g.pairs + '</div></div>'
+            +       '<div class="strip-price"><div class="strip-price-lbl">WS Price</div><div class="strip-price-val">' + currSymbol + unit.toFixed(2) + '</div></div>'
+            +       '<div class="strip-price"><div class="strip-price-lbl">RRP</div><div class="strip-price-val">' + (rrp > 0 ? currSymbol + rrp.toFixed(2) : '—') + '</div></div>'
+            +       '<div class="strip-price"><div class="strip-price-lbl">Line Total</div><div class="strip-price-val lt">' + currSymbol + lineTotal.toFixed(2) + '</div></div>'
+            +     '</div>'
+            +   '</div>'
+            + '</div>';
+        });
+      });
+      bodyHtml   += mHtml;
+      grandPairs += monthPairs;
+      grandValue += monthValue;
+    });
+    var grandValueInclGST = grandValue * 1.1;
+
+    // ── Assemble print container ─────────────────────────────────────────
+    var printContainer = document.getElementById('print-container');
+    if (!printContainer) { c.toast('Print container missing on this page.', 'error'); return; }
+
+    printContainer.innerHTML = ''
+      + '<style>'
+      + '.fpdf-root *{box-sizing:border-box;margin:0;padding:0;}'
+      + '.fpdf-root{width:794px;background:white;font-family:Arial,Helvetica,sans-serif;padding:24px;}'
+      + '.v1-logo-bar{display:flex;align-items:center;justify-content:space-between;padding:0 0 14px;}'
+      + '.v1-logo-fj{height:32px;}'
+      + '.v1-logo-curate{height:20px;}'
+      + '.v1-banner-wrap{position:relative;width:100%;height:130px;overflow:hidden;margin-bottom:0;background:' + NAVY + ';}'
+      + '.v1-banner-img{width:100%;height:100%;object-fit:cover;display:block;}'
+      + '.v1-banner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(to right,rgba(0,0,0,0.6) 0%,rgba(0,0,0,0.2) 50%,transparent 100%);display:flex;align-items:center;padding:0 24px;}'
+      + '.v1-banner-text{color:white;display:flex;flex-direction:column;gap:2px;}'
+      + '.v1-banner-title{font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;}'
+      + '.v1-banner-subtitle{font-size:9px;opacity:0.7;letter-spacing:1px;text-transform:uppercase;}'
+      + '.v1-info-bar{display:flex;gap:0;border:1.5px solid ' + NAVY + ';margin-bottom:20px;}'
+      + '.v1-info-cell{flex:1;padding:10px 12px;border-right:1px solid #e0e3ea;display:flex;flex-direction:column;gap:2px;}'
+      + '.v1-info-cell:last-child{border-right:none;}'
+      + '.v1-info-cell.wide{flex:2;}'
+      + '.v1-info-cell.narrow{flex:0.6;}'
+      + '.v1-info-cell.highlight{background:#f0f2f8;}'
+      + '.v1-info-lbl{font-size:7px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;}'
+      + '.v1-info-val{font-size:11px;font-weight:700;color:' + NAVY + ';}'
+      + '.v1-info-val-lg{font-size:14px;font-weight:700;color:' + NAVY + ';}'
+      + '.v1-group-row{display:flex;align-items:center;gap:8px;}'
+      + '.v1-group-logo{height:22px;object-fit:contain;}'
+      + '.fpdf-body{padding:0;}'
+      + '.fpdf-month-h{font-size:12px;font-weight:700;color:#fff;text-transform:uppercase;background:#444;padding:12px 14px 10px;margin-top:18px;letter-spacing:1.5px;display:flex;justify-content:space-between;line-height:1;}'
+      + '.fpdf-month-h:first-child{margin-top:0;}'
+      + '.fpdf-month-h-right{font-size:10px;font-weight:600;letter-spacing:0.5px;opacity:0.9;}'
+      + '.fpdf-sub-h{font-size:8.5px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1.2px;margin:14px 0 6px;border-bottom:1px solid #eee;padding-bottom:5px;}'
+      + '.strip{display:flex;align-items:stretch;border:1px solid #e0e3ea;margin-bottom:5px;page-break-inside:avoid;min-height:80px;}'
+      + '.strip-img{width:80px;height:80px;flex-shrink:0;object-fit:contain;border-right:1px solid #eee;align-self:flex-start;background:#fafafa;}'
+      + '.strip-body{flex:1;display:flex;flex-direction:column;min-width:0;}'
+      + '.strip-top{display:flex;align-items:flex-start;gap:10px;padding:6px 10px;flex:1;}'
+      + '.strip-meta{flex:1;min-width:0;}'
+      + '.strip-sku{font-size:8px;color:#999;font-family:monospace;}'
+      + '.strip-name-row{display:flex;align-items:center;gap:4px;margin:1px 0;}'
+      + '.strip-name{font-size:10.5px;font-weight:700;color:' + NAVY + ';line-height:1.25;}'
+      + '.strip-colour{font-size:8.5px;color:#666;}'
+      + '.strip-chips{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;}'
+      + '.new-badge{display:inline-block;background:#c8102e;color:white;font-size:6.5px;font-weight:800;padding:3px 4px 2px;letter-spacing:0.5px;line-height:1;}'
+      + '.energy-chip{display:inline-block;background:#1f7a48;color:white;font-size:6.5px;font-weight:800;padding:2px 5px;letter-spacing:0.5px;line-height:1.4;text-transform:uppercase;}'
+      + '.excl-chip{display:inline-block;background:#5b21b6;color:white;font-size:6.5px;font-weight:800;padding:2px 5px;letter-spacing:0.5px;line-height:1.4;text-transform:uppercase;}'
+      + '.width-chip{display:inline-block;background:' + NAVY + ';color:white;font-size:6.5px;font-weight:800;padding:2px 5px;letter-spacing:0.5px;line-height:1.4;text-transform:uppercase;}'
+      + '.strip-sizes{display:flex;gap:3px;align-items:flex-end;flex-shrink:0;padding-top:3px;flex-wrap:wrap;max-width:380px;justify-content:flex-end;}'
+      + '.strip-size-col{display:flex;flex-direction:column;align-items:center;gap:1px;}'
+      + '.strip-size-lbl{font-size:7px;color:#888;font-weight:700;}'
+      + '.strip-size-box{width:26px;border:1.5px solid ' + NAVY + ';font-size:10px;font-weight:700;color:' + NAVY + ';line-height:21px;text-align:center;padding:0;}'
+      + '.strip-bottom{display:flex;background:#f8f9fb;border-top:1px solid #eee;padding:7px 10px 5px;gap:0;}'
+      + '.strip-price{flex:1;}'
+      + '.strip-price-lbl{font-size:7px;color:#999;text-transform:uppercase;letter-spacing:0.3px;font-weight:600;line-height:1;margin-bottom:2px;}'
+      + '.strip-price-val{font-size:9.5px;font-weight:600;color:#333;line-height:1;}'
+      + '.strip-price-val.lt{color:' + NAVY + ';font-weight:700;}'
+      + '.fpdf-grand{background:#f0f2f8;border:2px solid ' + NAVY + ';padding:18px 22px;margin-top:10px;}'
+      + '.fpdf-grand-title{font-size:11px;font-weight:700;color:' + NAVY + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}'
+      + '.fpdf-grand-row{display:flex;gap:48px;}'
+      + '.fpdf-grand-v{font-size:26px;font-weight:700;color:' + NAVY + ';line-height:1.1;margin-top:2px;}'
+      + '.fpdf-p{display:flex;flex-direction:column;gap:2px;}'
+      + '.fpdf-pl{font-size:7.5px;color:#999;text-transform:uppercase;letter-spacing:.4px;}'
+      + '</style>'
+      + '<div class="fpdf-root">'
+      +   '<div class="v1-logo-bar">'
+      +     '<img class="v1-logo-fj" src="' + c.escapeAttr(fjLogoBlack) + '">'
+      +     '<img class="v1-logo-curate" src="' + c.escapeAttr(curateLogoBlack) + '">'
+      +   '</div>'
+      +   '<div class="v1-banner-wrap">'
+      +     '<img class="v1-banner-img" src="' + c.escapeAttr(bannerImg) + '" data-fw-pdf-fallback="banner" data-season-id="' + c.escapeAttr(seasonId) + '">'
+      +     '<div class="v1-banner-overlay">'
+      +       '<div class="v1-banner-text">'
+      +         '<div class="v1-banner-title">Footwear Prebook Order</div>'
+      +         '<div class="v1-banner-subtitle">' + c.escapeHtml(seasonLabel) + '</div>'
+      +       '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="v1-info-bar">'
+      +     '<div class="v1-info-cell wide">'
+      +       '<div class="v1-info-lbl">Partner</div>'
+      +       '<div class="v1-group-row">'
+      +         '<div class="v1-info-val">' + c.escapeHtml(account) + '</div>'
+      +         (groupLogoUrl ? '<img class="v1-group-logo" src="' + c.escapeAttr(groupLogoUrl) + '" data-fw-pdf-fallback="hide">' : '')
+      +       '</div>'
+      +     '</div>'
+      +     '<div class="v1-info-cell">'
+      +       '<div class="v1-info-lbl">Account Manager</div>'
+      +       '<div class="v1-info-val">' + c.escapeHtml(manager) + '</div>'
+      +     '</div>'
+      +     '<div class="v1-info-cell">'
+      +       '<div class="v1-info-lbl">Order Date</div>'
+      +       '<div class="v1-info-val">' + c.escapeHtml(dateVal) + '</div>'
+      +     '</div>'
+      +     '<div class="v1-info-cell narrow highlight">'
+      +       '<div class="v1-info-lbl">Pairs</div>'
+      +       '<div class="v1-info-val-lg">' + grandPairs + '</div>'
+      +     '</div>'
+      +     '<div class="v1-info-cell highlight">'
+      +       '<div class="v1-info-lbl">Total (excl GST)</div>'
+      +       '<div class="v1-info-val-lg">' + currSymbol + grandValue.toFixed(2) + '</div>'
+      +     '</div>'
+      +     '<div class="v1-info-cell highlight">'
+      +       '<div class="v1-info-lbl">Total (incl GST)</div>'
+      +       '<div class="v1-info-val-lg">' + currSymbol + grandValueInclGST.toFixed(2) + '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="fpdf-body">' + bodyHtml + '</div>'
+      +   '<div class="fpdf-grand">'
+      +     '<div class="fpdf-grand-title">Order Total</div>'
+      +     '<div class="fpdf-grand-row">'
+      +       '<div class="fpdf-p"><div class="fpdf-pl">Total Pairs</div><div class="fpdf-grand-v">' + grandPairs + '</div></div>'
+      +       '<div class="fpdf-p"><div class="fpdf-pl">Total Value</div><div class="fpdf-grand-v">' + currSymbol + grandValue.toFixed(2) + '</div></div>'
+      +     '</div>'
+      +   '</div>'
+      + '</div>';
+
+    // Wire image fallbacks. The banner falls back to the apparel-side
+    // banner (without -shoe) if the footwear-specific file doesn't
+    // exist; the group logo silently hides if missing; the strip image
+    // background-fills if a product's image isn't in storage.
+    printContainer.querySelectorAll('img[data-fw-pdf-fallback]').forEach(function (img) {
+      img.addEventListener('error', function () {
+        var fb = img.getAttribute('data-fw-pdf-fallback');
+        img.removeAttribute('data-fw-pdf-fallback');
+        if (fb === 'banner') {
+          var sid   = img.getAttribute('data-season-id') || '';
+          var clean = sid.replace(/-shoe$/i, '');
+          if (clean && clean !== sid) {
+            img.src = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/seasonal-images/season-' + clean + '-banner.jpg';
+          }
+        } else if (fb === 'hide')  { img.style.display = 'none'; }
+        else if (fb === 'strip') { img.style.background = '#f3f4f6'; }
+      }, { once: true });
+    });
+
+    // Give images a moment to load (banner, logos, product strips),
+    // then trigger the browser print dialog. Same 600 ms timing as the
+    // apparel PDF.
+    await new Promise(function (r) { setTimeout(r, 600); });
+    window.print();
+    // The print container clears after the dialog dismisses (sync).
+    printContainer.innerHTML = '';
   }
 
   // ── Modal plumbing ──────────────────────────────────────────────────────
