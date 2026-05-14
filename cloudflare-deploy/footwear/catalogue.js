@@ -205,6 +205,12 @@
           if (!isNaN(ai) && !isNaN(bi) && ai !== bi) return ai - bi;
           return String(a.sku || '').localeCompare(String(b.sku || ''));
         });
+        // After sorting, collapse rows that share a base_sku into a
+        // single representative product carrying the sibling variants
+        // on a ._variants array. The product card uses that to render
+        // a width-pill toggle instead of repeating the same shoe image
+        // and metadata three times.
+        productsByCol[cid][sid] = dedupeByBaseSku(productsByCol[cid][sid]);
       });
     });
 
@@ -353,16 +359,61 @@
       return a.sortKey - b.sortKey;
     });
 
-    // Sort products within each group by item_number, then sku.
+    // Sort products within each group by item_number, then sku. After
+    // sorting, collapse rows that share a base_sku so My Selections
+    // shows one consolidated card per style with a width toggle, the
+    // same as the regular catalogue panels do.
     groups.forEach(function (g) {
       g.products.sort(function (a, b) {
         var ai = Number(a.item_number); var bi = Number(b.item_number);
         if (!isNaN(ai) && !isNaN(bi) && ai !== bi) return ai - bi;
         return String(a.sku || '').localeCompare(String(b.sku || ''));
       });
+      g.products = dedupeByBaseSku(g.products);
     });
 
     return groups;
+  }
+
+  // Collapse rows that share a base_sku into a single representative
+  // product. Variant rows are attached as ._variants on every member so
+  // any one of them can serve as the "active variant" the card is
+  // showing. Width preference for the rep: Medium > Wide > Narrow > X
+  // Wide > anything else, falling back to the first row when widths
+  // are missing entirely.
+  //
+  // Rows with no base_sku (or a unique base_sku) pass through unchanged
+  // as a single-variant group — the card renderer suppresses the
+  // toggle when ._variants has only one entry.
+  var WIDTH_RANK = { 'M': 1, 'W': 2, 'N': 3, 'XW': 4 };
+  function widthSortKey(p) {
+    var w = String((p && p.width) || '').trim().toUpperCase();
+    return WIDTH_RANK[w] || 99;
+  }
+  function dedupeByBaseSku(products) {
+    var groups = {};
+    var order  = [];
+    products.forEach(function (p) {
+      var key = p.base_sku || p.sku || p.id;
+      if (!groups[key]) {
+        groups[key] = [p];
+        order.push(key);
+      } else {
+        groups[key].push(p);
+      }
+    });
+    return order.map(function (k) {
+      var variants = groups[k].slice().sort(function (a, b) {
+        var av = widthSortKey(a), bv = widthSortKey(b);
+        if (av !== bv) return av - bv;
+        return String(a.sku || '').localeCompare(String(b.sku || ''));
+      });
+      // Attach the variants list to every member so the card can render
+      // any one of them as the active variant and still know its
+      // siblings (for the pill toggle).
+      variants.forEach(function (v) { v._variants = variants; });
+      return variants[0];
+    });
   }
 
   // Pick a single delivery month label per product. Most footwear ships
@@ -531,13 +582,29 @@
     if (c.cart && typeof c.cart.wireProductCard === 'function') {
       col.subsections.forEach(function (sub) {
         sub.products.forEach(function (p) {
-          var card = body.querySelector('.pcard[data-fw-product-id="' + cssEscape(p.id) + '"]');
+          var card = findCardFor(body, p);
           if (card) c.cart.wireProductCard(card, p);
         });
       });
     }
 
     wireAccordionToggles(body);
+  }
+
+  // Locate the rendered card for a given representative product. For
+  // single-width products we match on data-fw-product-id; for
+  // consolidated multi-width products the card may have been rendered
+  // for a different active variant (the rep's previous pill choice for
+  // this style), so we fall back to matching on data-fw-base-sku.
+  function findCardFor(body, p) {
+    if (p && p._variants && p._variants.length > 1) {
+      var baseKey = p.base_sku || p.sku;
+      if (baseKey) {
+        var byBase = body.querySelector('.pcard[data-fw-base-sku="' + cssEscape(baseKey) + '"]');
+        if (byBase) return byBase;
+      }
+    }
+    return body.querySelector('.pcard[data-fw-product-id="' + cssEscape(p.id) + '"]');
   }
 
   // Render the "My selections" panel: only products with at least one
@@ -587,7 +654,7 @@
     if (c.cart && typeof c.cart.wireProductCard === 'function') {
       groups.forEach(function (g) {
         g.products.forEach(function (p) {
-          var card = body.querySelector('.pcard[data-fw-product-id="' + cssEscape(p.id) + '"]');
+          var card = findCardFor(body, p);
           if (card) c.cart.wireProductCard(card, p);
         });
       });

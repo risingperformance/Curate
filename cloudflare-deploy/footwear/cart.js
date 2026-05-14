@@ -1010,6 +1010,14 @@
 
   var PRODUCT_IMG_BASE = 'https://mlwzpgtdgfaczgxipbsq.supabase.co/storage/v1/object/public/product-images/';
 
+  // Remembers the rep's last-selected variant per consolidated style.
+  // Keyed by base_sku (or sku when base_sku is missing). The catalogue
+  // calls paintBody() on a lot of interactions (accordion toggles,
+  // search, newOnly, tab switches) and each call re-runs
+  // renderProductCard from scratch — without this map, every repaint
+  // would snap the card back to Medium.
+  var activeVariantByBaseSku = {};
+
   function priceForCountry(product) {
     var country = (window.fwApp.state.currentUser && window.fwApp.state.currentUser.country) || 'AUD';
     if (country === 'NZD') {
@@ -1048,10 +1056,57 @@
     return s;
   }
 
+  // Pill label: same map as widthDisplayLabel but also returns "Wide"
+  // for W (instead of null), because in the consolidated-card width
+  // toggle every width — including the default Wide — needs a visible
+  // label.
+  function pillLabelFor(w) {
+    if (w == null || w === '') return 'Standard';
+    var s = String(w).trim().toUpperCase();
+    if (s === 'M')  return 'Medium';
+    if (s === 'N')  return 'Narrow';
+    if (s === 'W')  return 'Wide';
+    if (s === 'XW') return 'X Wide';
+    return s;
+  }
+
+  // Sum pairs across every size of one product variant. Used to keep
+  // each width pill's count live as the rep adjusts quantities.
+  function totalPairsFor(variant) {
+    var v = variant || {};
+    var sizes = parseSizesField(v.sizes);
+    var w = v.width || null;
+    var total = 0;
+    sizes.forEach(function (s) { total += getQty(v.id, s, w); });
+    return total;
+  }
+
   function renderProductCard(product) {
     var c     = window.fwApp;
     var ehtml = c.escapeHtml;
     var eattr = c.escapeAttr;
+
+    // Width consolidation: when the catalogue groups sibling rows that
+    // share a base_sku, every variant arrives with a ._variants array
+    // attached and `product` is the currently active variant for the
+    // card. The width toggle below the price lets the rep flip between
+    // siblings without spawning a separate card per width.
+    //
+    // Before reading width-dependent fields off `product`, honour the
+    // rep's previous pill choice for this style (kept across
+    // re-renders by activeVariantByBaseSku). Swap to the remembered
+    // variant if one is recorded for this base_sku.
+    var variants    = (product._variants && product._variants.length > 1) ? product._variants : null;
+    var multiWidth  = !!variants;
+    if (multiWidth) {
+      var baseKey = product.base_sku || product.sku;
+      var savedId = baseKey ? activeVariantByBaseSku[baseKey] : null;
+      if (savedId && savedId !== product.id) {
+        for (var i = 0; i < variants.length; i++) {
+          if (variants[i].id === savedId) { product = variants[i]; break; }
+        }
+      }
+    }
 
     var sizes = parseSizesField(product.sizes);
     var width = product.width || null;
@@ -1066,7 +1121,9 @@
     // Width badge follows the catalogue convention: W is the default
     // (no badge), M -> Medium, N -> Narrow, XW -> X Wide. Anything
     // else renders the raw value verbatim so we don't silently hide
-    // unknown codes.
+    // unknown codes. When the card carries a width toggle (multiWidth)
+    // the width badge is suppressed — the toggle already conveys which
+    // width the size grid maps to.
     var silo = (product.silo || '').trim();
     var widthLabel = widthDisplayLabel(width);
     var badges = ''
@@ -1074,7 +1131,7 @@
       + (silo                  ? '<span class="pcard-badge pcard-badge-silo">' + ehtml(silo) + '</span>' : '')
       + (product.is_top_seller ? '<span class="pcard-badge pcard-badge-top">Top Seller</span>' : '')
       + (product.exclusive     ? '<span class="pcard-badge pcard-badge-excl">' + ehtml(product.exclusive) + '</span>' : '')
-      + (widthLabel            ? '<span class="pcard-badge pcard-badge-width">' + ehtml(widthLabel) + '</span>' : '');
+      + ((widthLabel && !multiWidth) ? '<span class="pcard-badge pcard-badge-width">' + ehtml(widthLabel) + '</span>' : '');
 
     // Energy is a footwear-only flag. The DB column is text so admins can
     // type "true"/"yes"/etc; we only light up the badge when the value is
@@ -1108,8 +1165,40 @@
       ? '<div class="pcard-details">' + ehtml(product.colour) + '</div>'
       : '';
 
+    // Build the width-pill toggle when this product has siblings. Each
+    // pill is a two-line button: width label on top, per-width total
+    // pairs below. Inline grid-template-columns var lets the same CSS
+    // class handle 2-width and 3-width products.
+    var widthToggleHtml = '';
+    var widthSkuLineHtml = '';
+    var addAllLabel = '+ Add 1 to all';
+    if (multiWidth) {
+      var pillsHtml = variants.map(function (v) {
+        var isActive = v.id === product.id;
+        var total    = totalPairsFor(v);
+        return ''
+          + '<button class="pcard-width-pill' + (isActive ? ' active' : '') + '"'
+          +        ' type="button"'
+          +        ' data-fw-cart-action="pick-width"'
+          +        ' data-fw-variant-id="' + eattr(v.id) + '"'
+          +        ' aria-pressed="' + (isActive ? 'true' : 'false') + '">'
+          +   '<span class="pcard-width-pill-label">' + ehtml(pillLabelFor(v.width)) + '</span>'
+          +   '<span class="pcard-width-pill-count' + (total === 0 ? ' empty' : '') + '">' + total + '</span>'
+          + '</button>';
+      }).join('');
+      widthToggleHtml = ''
+        + '<div class="pcard-width-toggle" style="--w-cols:' + variants.length + '">'
+        +   pillsHtml
+        + '</div>';
+      var sizesAvailable = sizes.length + ' size' + (sizes.length === 1 ? '' : 's') + ' available';
+      widthSkuLineHtml = '<div class="pcard-width-sku">SKU ' + ehtml(product.sku || '') + ' &middot; ' + sizesAvailable + '</div>';
+      addAllLabel = '+ Add 1 to all ' + pillLabelFor(width);
+    }
+
     return ''
-      + '<div class="pcard" data-fw-product-id="' + eattr(product.id) + '">'
+      + '<div class="pcard" data-fw-product-id="' + eattr(product.id) + '"'
+      +     (multiWidth ? ' data-fw-base-sku="' + eattr(product.base_sku || product.sku || '') + '"' : '')
+      +   '>'
       +   '<div class="pcard-img-wrap">'
       +     '<img class="pcard-img" alt="" src="' + eattr(imgUrl) + '" data-fw-img-fallback="pcard">'
       +     energyHtml
@@ -1121,10 +1210,12 @@
       +   '<div class="pcard-name">' + ehtml(product.name || '') + '</div>'
       +   detailsHtml
       +   priceHtml
+      +   widthToggleHtml
+      +   widthSkuLineHtml
       +   (sizes.length > 0
           ? '<div class="pcard-sizes">' + sizesHtml + '</div>'
             + '<div class="pcard-actions">'
-            +   '<button class="pcard-add-all" data-fw-cart-action="add-all" type="button">+ Add 1 to all</button>'
+            +   '<button class="pcard-add-all" data-fw-cart-action="add-all" type="button">' + ehtml(addAllLabel) + '</button>'
             +   '<button class="pcard-clear"   data-fw-cart-action="clear"   type="button">Clear</button>'
             + '</div>'
           : '<div class="pcard-no-sizes">No sizes available for this product.</div>')
@@ -1139,10 +1230,43 @@
       btn.textContent = qty > 0 ? String(qty) : '—';
       btn.classList.toggle('size-btn-active', qty > 0);
     });
+    paintWidthPillsForCard(cardEl, product);
+  }
+
+  // Update each width pill's count display in place. No-op on cards
+  // that don't carry a width toggle (single-width products). Called
+  // after every size mutation so the per-width totals stay live as the
+  // rep adds or clears pairs without needing to re-render the card.
+  function paintWidthPillsForCard(cardEl, product) {
+    if (!product || !product._variants || product._variants.length <= 1) return;
+    product._variants.forEach(function (v) {
+      var pill = cardEl.querySelector('.pcard-width-pill[data-fw-variant-id="' + (v.id || '').replace(/"/g, '\\"') + '"]');
+      if (!pill) return;
+      var countEl = pill.querySelector('.pcard-width-pill-count');
+      if (!countEl) return;
+      var total = totalPairsFor(v);
+      countEl.textContent = String(total);
+      countEl.classList.toggle('empty', total === 0);
+    });
   }
 
   function wireProductCard(cardEl, product) {
     var c = window.fwApp;
+
+    // If the card was rendered for a different variant than the rep
+    // the catalogue handed us (because the rep had previously picked
+    // another width for this style), resolve to the actual variant the
+    // DOM is showing. Keeps size-button click handlers writing
+    // quantities under the right product_id + width.
+    if (product._variants && product._variants.length > 1) {
+      var domId = cardEl.dataset && cardEl.dataset.fwProductId;
+      if (domId && domId !== product.id) {
+        for (var pi = 0; pi < product._variants.length; pi++) {
+          if (product._variants[pi].id === domId) { product = product._variants[pi]; break; }
+        }
+      }
+    }
+
     var width = product.width || null;
     var sizes = parseSizesField(product.sizes);
 
@@ -1241,6 +1365,34 @@
         paintSizeButtonsForCard(cardEl, product);
       });
     }
+
+    // Width pills: clicking flips the active variant. We re-render the
+    // card so the size grid, SKU line, Add label, and the active pill
+    // state all swap together. The replaced card is re-wired so the
+    // new size buttons / pills / Add / Clear all work.
+    cardEl.querySelectorAll('[data-fw-cart-action="pick-width"]').forEach(function (pill) {
+      pill.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var variantId = pill.dataset.fwVariantId;
+        if (!variantId || !product._variants) return;
+        var newActive = null;
+        for (var i = 0; i < product._variants.length; i++) {
+          if (product._variants[i].id === variantId) { newActive = product._variants[i]; break; }
+        }
+        if (!newActive || newActive.id === product.id) return;
+        // Persist the rep's choice so later catalogue re-renders
+        // (accordion toggles, search, tab switches) keep the same
+        // active width instead of snapping back to Medium.
+        var baseKeyClick = newActive.base_sku || newActive.sku;
+        if (baseKeyClick) activeVariantByBaseSku[baseKeyClick] = newActive.id;
+        var temp = document.createElement('div');
+        temp.innerHTML = renderProductCard(newActive);
+        var newCardEl = temp.firstElementChild;
+        if (!newCardEl || !cardEl.parentNode) return;
+        cardEl.parentNode.replaceChild(newCardEl, cardEl);
+        wireProductCard(newCardEl, newActive);
+      });
+    });
   }
 
   // Quantity popup: lightweight modal with a number input, used for

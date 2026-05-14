@@ -233,6 +233,59 @@
   color: var(--fj-mid);
 }
 
+/* Width pill toggle (May 2026 width-consolidation pass). Shown only on
+   cards that aggregate multiple width SKUs sharing a base_sku (e.g.
+   Premiere Packard Narrow / Medium / Wide). Each pill is a two-line
+   segmented-control button: width label on top, per-width total pairs
+   below. Active pill flips to white-on-shadow; inactive pills stay
+   muted. Fits a 256 px card comfortably with three pills + 3 px gap. */
+.pcard-width-toggle {
+  display: grid;
+  grid-template-columns: repeat(var(--w-cols, 3), 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: var(--fj-light);
+  border-radius: 99px;
+  margin-bottom: 10px;
+}
+.pcard-width-pill {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1px;
+  padding: 6px 0 5px;
+  line-height: 1;
+  border: 0; background: transparent;
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: 'Barlow', sans-serif;
+  color: var(--fj-mid);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.pcard-width-pill.active {
+  background: #fff; color: var(--fj-navy);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.pcard-width-pill-label {
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.pcard-width-pill-count {
+  font-size: 12px; font-weight: 700;
+  color: var(--fj-green);
+}
+.pcard-width-pill.active .pcard-width-pill-count { color: var(--fj-navy); }
+.pcard-width-pill-count.empty { color: var(--fj-mid); opacity: 0.55; }
+
+/* Small caption line under the toggle that surfaces the active
+   variant's SKU + size count, so the rep always sees which variant
+   the size grid below maps to. */
+.pcard-width-sku {
+  font-size: 10px;
+  color: var(--fj-mid);
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+
 /* Inline size grid. Switched to a 7-column CSS grid (May 2026) so the
    14-size catalogue lays out as a clean 7 + 7 grid instead of cramming
    every size into a single row. Buttons now meet the 44 px touch-target
