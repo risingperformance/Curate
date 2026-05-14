@@ -233,34 +233,39 @@
   color: var(--fj-mid);
 }
 
-/* Inline size grid */
+/* Inline size grid. Switched to a 7-column CSS grid (May 2026) so the
+   14-size catalogue lays out as a clean 7 + 7 grid instead of cramming
+   every size into a single row. Buttons now meet the 44 px touch-target
+   guideline; products with fewer sizes still align on the same column
+   width across cards so the catalogue stays visually consistent. */
 .pcard-sizes {
-  display: flex; flex-wrap: nowrap;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
   width: 100%;
   margin-bottom: 10px;
 }
 .size-col {
   display: flex; flex-direction: column; align-items: center;
   gap: 4px;
-  flex: 1;
   min-width: 0;
 }
 .size-label {
-  font-size: 9px; font-weight: 700;
+  font-size: 10px; font-weight: 700;
   letter-spacing: 0.5px; text-transform: uppercase;
   color: var(--fj-mid);
   white-space: nowrap;
 }
 .size-btn {
   width: 100%;
-  padding: 8px 2px;
+  padding: 12px 4px;
+  min-height: 42px;
   border: 1px solid var(--fj-border);
   border-radius: var(--radius);
   background: #fff;
   color: var(--fj-mid);
   font-family: 'Barlow', sans-serif;
-  font-size: 11px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   text-align: center;
