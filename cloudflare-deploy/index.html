@@ -1869,6 +1869,10 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 32px; height: 64px;
     max-width: 1680px; margin: 0 auto;
+    /* Anchor for the hamburger dropdown so its `right: 32px` aligns
+       with the right edge of this centered container (= hamburger
+       button's right edge) on wide screens, not the viewport edge. */
+    position: relative;
   }
   .dash-fj-logo { display: flex; align-items: center; }
   .dash-fj-logo-img { height: 36px; width: auto; display: block; }
@@ -2615,28 +2619,31 @@
         <!-- Hidden legacy button so existing data-action="signOut" handlers still resolve. -->
         <button id="btn-sign-out" data-action="signOut" hidden>Sign Out</button>
       </div>
-    </div>
 
-    <!-- Dropdown menu -->
-    <div class="dash-menu" id="dash-menu" role="menu" aria-labelledby="dash-menu-btn" hidden>
-      <div class="dash-menu-profile">
-        <div class="dash-menu-profile-name" id="dash-menu-profile-name">Signed in as</div>
-        <div class="dash-menu-profile-email" id="dash-menu-profile-email">-</div>
+      <!-- Dropdown menu. Lives inside .dash-topbar-inner so its
+           `right: 32px` aligns with the right edge of the centered
+           1680px container (= the hamburger button's right edge)
+           on wide screens, not with the viewport edge. -->
+      <div class="dash-menu" id="dash-menu" role="menu" aria-labelledby="dash-menu-btn" hidden>
+        <div class="dash-menu-profile">
+          <div class="dash-menu-profile-name" id="dash-menu-profile-name">Signed in as</div>
+          <div class="dash-menu-profile-email" id="dash-menu-profile-email">-</div>
+        </div>
+        <div class="dash-menu-sep"></div>
+        <a class="dash-menu-item" role="menuitem" href="dashboard.html">
+          <span class="dash-menu-icon">&#9645;</span>
+          <span>Go to Dashboard</span>
+        </a>
+        <a class="dash-menu-item" role="menuitem" href="admin.html" id="dash-menu-admin" hidden>
+          <span class="dash-menu-icon">&#9881;</span>
+          <span>Go to Admin Portal</span>
+        </a>
+        <div class="dash-menu-sep"></div>
+        <button class="dash-menu-item" role="menuitem" type="button" data-action="signOut">
+          <span class="dash-menu-icon">&#9099;</span>
+          <span>Sign out</span>
+        </button>
       </div>
-      <div class="dash-menu-sep"></div>
-      <a class="dash-menu-item" role="menuitem" href="dashboard.html">
-        <span class="dash-menu-icon">&#9645;</span>
-        <span>Go to Dashboard</span>
-      </a>
-      <a class="dash-menu-item" role="menuitem" href="admin.html" id="dash-menu-admin" hidden>
-        <span class="dash-menu-icon">&#9881;</span>
-        <span>Go to Admin Portal</span>
-      </a>
-      <div class="dash-menu-sep"></div>
-      <button class="dash-menu-item" role="menuitem" type="button" data-action="signOut">
-        <span class="dash-menu-icon">&#9099;</span>
-        <span>Sign out</span>
-      </button>
     </div>
   </header>
 
