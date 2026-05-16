@@ -362,21 +362,25 @@
     window.location.replace('../index.html');
   }
 
-  // Wipe session-scoped order state and route back to the start of the
-  // questionnaire so the rep can build another order without
-  // navigating away or signing out. The customers cache and the
-  // currentUser stay in place so the rep doesn't have to re-pick a
-  // customer or re-authenticate.
+  // Restart the form from the questionnaire after a submitted order.
+  //
+  // The naive approach (clear state, call setView('questionnaire')) does
+  // not work because showSubmittedScreen() overwrites app-main's
+  // innerHTML to render the submitted card, which wipes out the
+  // view-questionnaire / view-deck / view-catalogue / view-summary
+  // containers that setView() needs to toggle between. Trying to
+  // rebuild that DOM in JS is fragile.
+  //
+  // Instead, reload the page to the same form with just the season
+  // hash. The Supabase session is preserved in localStorage so the
+  // rep stays signed in. Any draft= or review= token in the URL
+  // hash is discarded so we don't resume into the just-submitted
+  // draft. The form remounts at its initial state, which is the
+  // questionnaire.
   function resetForNewOrder() {
-    state.activeDraftId        = null;
-    state.activeShareToken     = null;
-    state.questionnaireAnswers = {};
-    state.slideOrder           = [];
-    state.excludedSlideIds     = [];
-    state.cartItems            = [];
-    state.customer             = null;
-    state.currentSlideProducts = [];
-    setView('questionnaire');
+    var url = window.location.pathname;
+    if (state.seasonId) url += '#season=' + encodeURIComponent(state.seasonId);
+    window.location.assign(url);
   }
 
   // ── View dispatch ───────────────────────────────────────────────────────
