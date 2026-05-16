@@ -215,17 +215,24 @@
       return;
     }
 
+    // Consolidate sibling width variants (same base_sku) into a single
+    // card with a Medium / Wide / Narrow pill toggle, matching the
+    // catalogue's UX. The dedupe helper attaches ._variants to every
+    // variant so renderProductCard knows to draw the toggle.
+    var dedupe = c && c.catalogue && c.catalogue.dedupeByBaseSku;
+    var deduped = (typeof dedupe === 'function') ? dedupe(list) : list;
+
     // Render the same .pcard markup the catalogue uses, then wire each
     // card with cart.wireProductCard so size buttons and Add CTAs work
     // exactly as they do in the catalogue.
-    railEl.innerHTML = list.map(function (p) {
+    railEl.innerHTML = deduped.map(function (p) {
       return cart.renderProductCard(p);
     }).join('');
 
     if (typeof cart.wireProductCard === 'function') {
-      list.forEach(function (p) {
+      deduped.forEach(function (p) {
         if (!p || !p.id) return;
-        var card = railEl.querySelector('.pcard[data-fw-product-id="' + cssEscape(p.id) + '"]');
+        var card = findCardForStripProduct(p);
         if (card) {
           try { cart.wireProductCard(card, p); } catch (e) {
             console.warn('slide-strip: wireProductCard threw:', e);
@@ -233,6 +240,23 @@
         }
       });
     }
+  }
+
+  // For consolidated multi-width products the card's data-fw-product-id
+  // may belong to whichever variant the rep last picked (the cart's
+  // activeVariantByBaseSku map decides which one is shown). Find the
+  // card by data-fw-base-sku for those cases; otherwise fall back to
+  // the product id selector.
+  function findCardForStripProduct(p) {
+    if (!railEl) return null;
+    if (p && p._variants && p._variants.length > 1) {
+      var baseKey = p.base_sku || p.sku;
+      if (baseKey) {
+        var byBase = railEl.querySelector('.pcard[data-fw-base-sku="' + cssEscape(baseKey) + '"]');
+        if (byBase) return byBase;
+      }
+    }
+    return railEl.querySelector('.pcard[data-fw-product-id="' + cssEscape(p.id) + '"]');
   }
 
   // ── Public: isOpen ──────────────────────────────────────────────────────

@@ -861,8 +861,14 @@
 
   window.fwApp.views.catalogue = renderCatalogue;
   window.fwApp.catalogue = {
-    invalidate:     invalidate,
-    onCartChanged:  onCartChanged,
-    getProductById: getProductById
+    invalidate:      invalidate,
+    onCartChanged:   onCartChanged,
+    getProductById:  getProductById,
+    // Exposed for other views (slide-product-strip, templates, future
+    // surfaces) so they can collapse multi-width product lists into a
+    // single card with a width pill toggle, the same way the
+    // catalogue does. Mutates each input variant to attach
+    // ._variants; returns one rep variant per base_sku.
+    dedupeByBaseSku: dedupeByBaseSku
   };
 })();
