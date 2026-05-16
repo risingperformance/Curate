@@ -450,6 +450,55 @@
     return { ok: true };
   }
 
+  // ensureDraftExists creates the footwear_drafts row early (on "Start
+  // Presentation") so slide telemetry has a draft_id to attach to from
+  // the very first impression. It mirrors persistDraft's INSERT branch
+  // but skips the units check in canSaveDraft (the cart is still empty
+  // at this point by definition). A customer must be picked or it's a
+  // no-op; the deck cannot run without one anyway.
+  //
+  // Idempotent: if activeDraftId is already set, returns success without
+  // a network call. Safe to call from any path that wants to guarantee
+  // the draft exists before proceeding.
+  async function ensureDraftExists() {
+    if (state.activeDraftId) {
+      return { error: null, id: state.activeDraftId };
+    }
+    var hasCustomer = !!(state.customer && state.customer.account_code);
+    if (!hasCustomer) {
+      return { error: null, skipped: true, reason: 'no-customer' };
+    }
+
+    var seasonId    = state.seasonId || 'AW27-shoe';
+    var accountCode = state.customer.account_code;
+
+    // Sweep any prior drafts the rep has for this season + customer,
+    // same as persistDraft. Non-fatal on error.
+    try {
+      await supa.from('footwear_drafts')
+        .delete()
+        .eq('season_id', seasonId)
+        .eq('status', 'draft')
+        .filter('customer_data->>account_code', 'eq', accountCode);
+    } catch (e) { /* ignore */ }
+
+    var insRes = await supa
+      .from('footwear_drafts')
+      .insert({
+        status:        'draft',
+        season_id:     seasonId,
+        customer_data: state.customer
+      })
+      .select('id, share_token')
+      .single();
+    if (insRes.error) return { error: insRes.error };
+    if (insRes.data) {
+      state.activeDraftId    = insRes.data.id;
+      state.activeShareToken = insRes.data.share_token;
+    }
+    return { error: null, id: state.activeDraftId };
+  }
+
   async function persistDraft(updates) {
     if (state.activeDraftId) {
       var upRes = await supa
@@ -592,6 +641,7 @@
   window.fwApp.setView          = setView;
   window.fwApp.persistDraft     = persistDraft;
   window.fwApp.canSaveDraft     = canSaveDraft;
+  window.fwApp.ensureDraftExists = ensureDraftExists;
   window.fwApp.signOut          = signOut;
   window.fwApp.resetForNewOrder = resetForNewOrder;
   window.fwApp.EMAIL_EDGE_FN    = EMAIL_EDGE_FN;

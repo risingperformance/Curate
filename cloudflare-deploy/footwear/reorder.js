@@ -499,6 +499,24 @@
 
     // Flush any pending debounced save first.
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+
+    // Force the draft row to exist before we leave reorder for deck.
+    // Without this, persistDraft's INSERT path is gated by canSaveDraft
+    // (no units in the cart yet) and slide telemetry from the first
+    // impressions onwards drops on the floor (no draft_id => RLS deny
+    // in the rep insert path). ensureDraftExists creates the row using
+    // the customer the rep already picked and leaves cart_items empty.
+    if (typeof c.ensureDraftExists === 'function') {
+      var ensureRes = await c.ensureDraftExists();
+      if (ensureRes && ensureRes.error) {
+        c.toast('Could not save: ' + (ensureRes.error.message || 'unknown error'), 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Start presentation →'; }
+        return;
+      }
+    }
+
+    // Now persist the reorder state. With activeDraftId set above, this
+    // goes through the UPDATE path and is no longer gated by the cart.
     var saveRes = await c.persistDraft({
       slide_order:        c.state.slideOrder,
       excluded_slide_ids: c.state.excludedSlideIds,

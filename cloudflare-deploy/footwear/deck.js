@@ -53,46 +53,92 @@
   //   customer -- the SECURITY DEFINER RPC record_footwear_slide_view,
   //               keyed on the share token.
   //
-  // The timer pauses while the tab is hidden (Page Visibility API) so
-  // a customer who alt-tabs to take a call doesn't accumulate four
-  // hours on whatever slide was last visible. The server-side trigger
-  // also clamps durations at 10 minutes for belt-and-braces.
+  // Lifecycle:
+  //   * Normal slide change   -> flush previous, open new (supabase-js insert)
+  //   * Tab goes background   -> flush + cache slide for restart on return
+  //                              (uses keepalive fetch since the OS may
+  //                              suspend the tab without firing pagehide)
+  //   * Tab returns           -> open a fresh impression for the cached slide
+  //   * Page unloads          -> flush via keepalive fetch so the request
+  //                              actually survives the tear-down
   //
-  // pagehide is wired to flush the last open impression when the page
-  // unloads, so closing the browser at the end of a session captures
-  // the final slide instead of dropping it.
-  var telemetryUserId   = null;      // cached auth.uid for the rep; resolved lazily
-  var currentImpression = null;      // { slideId, slideKey, slideTitle, displayOrder, startedAt, pausedMs, pausedAt }
-  var telemetryWired    = false;
+  // The server-side trigger clamps durations at 10 minutes regardless.
+  //
+  // We cache the auth user id and access token (refreshed via
+  // onAuthStateChange) so the pagehide path doesn't have to await the
+  // session resolver while the page is going away.
+  var telemetryUserId      = null;   // cached auth.uid for the rep
+  var telemetryAccessToken = null;   // cached JWT for direct REST writes on pagehide
+  var currentImpression    = null;   // { slideId, slideKey, slideTitle, displayOrder, startedAt }
+  var lastSlideForRestart  = null;   // { slide, idx } -- used to reopen after visibilitychange:visible
+  var telemetryWired       = false;
 
-  function ensureTelemetryUserId() {
-    if (telemetryUserId) return Promise.resolve(telemetryUserId);
+  function ensureTelemetryAuth() {
     var c = window.fwApp;
     if (!c || !c.supa || c.state.reviewMode) return Promise.resolve(null);
-    return c.supa.auth.getUser().then(function (r) {
-      telemetryUserId = (r && r.data && r.data.user && r.data.user.id) || null;
+    return c.supa.auth.getSession().then(function (r) {
+      var s = r && r.data && r.data.session;
+      if (s) {
+        telemetryUserId      = (s.user && s.user.id) || null;
+        telemetryAccessToken = s.access_token || null;
+      }
       return telemetryUserId;
     }).catch(function () { return null; });
+  }
+
+  // Back-compat alias for callers that still ask just for the user id.
+  function ensureTelemetryUserId() {
+    if (telemetryUserId) return Promise.resolve(telemetryUserId);
+    return ensureTelemetryAuth();
   }
 
   function wireTelemetryListeners() {
     if (telemetryWired) return;
     telemetryWired = true;
+    var c = window.fwApp;
+
     // pagehide is more reliable than beforeunload on mobile Safari.
-    // Both wire so we catch every navigation-away path.
-    window.addEventListener('pagehide',    flushCurrentImpression);
+    // Both wire so we catch every navigation-away path. Each handler
+    // routes through flushCurrentImpression which uses keepalive fetch
+    // for the rep insert so the request can outlive the page.
+    window.addEventListener('pagehide',     flushCurrentImpression);
     window.addEventListener('beforeunload', flushCurrentImpression);
+
+    // Tab-hide is now a flush, not a pause. The old pause-and-resume
+    // model held time in memory and relied on a later slide change or
+    // unload to actually write it. On mobile the OS often suspends the
+    // tab without firing pagehide, so that time was lost. Flushing on
+    // hide writes whatever has accumulated; visible re-opens a fresh
+    // impression on the same slide if the deck is still active.
     document.addEventListener('visibilitychange', function () {
-      if (!currentImpression) return;
-      if (document.hidden) {
-        // Pause: remember when the tab went away.
-        currentImpression.pausedAt = Date.now();
-      } else if (currentImpression.pausedAt) {
-        // Resume: add the elapsed pause time to the running total.
-        currentImpression.pausedMs += Date.now() - currentImpression.pausedAt;
-        currentImpression.pausedAt = null;
+      var app = window.fwApp;
+      if (!app || !app.state) return;
+      if (document.visibilityState === 'hidden') {
+        flushCurrentImpression();
+      } else if (document.visibilityState === 'visible') {
+        if (!currentImpression
+            && lastSlideForRestart
+            && lastSlideForRestart.slide
+            && app.state.activeView === 'deck') {
+          startImpression(lastSlideForRestart.slide, lastSlideForRestart.idx);
+        }
       }
     });
+
+    // Keep the cached auth in sync so the pagehide flush has a valid
+    // JWT to attach without an async getSession() call. Refreshes also
+    // fire here so a long-lived deck still writes successfully.
+    if (c && c.supa && c.supa.auth && typeof c.supa.auth.onAuthStateChange === 'function') {
+      c.supa.auth.onAuthStateChange(function (_event, session) {
+        if (session) {
+          telemetryUserId      = (session.user && session.user.id) || null;
+          telemetryAccessToken = session.access_token || null;
+        } else {
+          telemetryUserId      = null;
+          telemetryAccessToken = null;
+        }
+      });
+    }
   }
 
   function startImpression(slide, idx) {
@@ -104,19 +150,19 @@
       slideKey:     slide.slide_key || null,
       slideTitle:   slide.title     || null,
       displayOrder: (typeof idx === 'number') ? idx : null,
-      startedAt:    Date.now(),
-      pausedMs:     0,
-      pausedAt:     null
+      startedAt:    Date.now()
     };
-    // Warm the user id cache for the rep so the first slide change
-    // already has it ready by the time the impression closes.
-    ensureTelemetryUserId();
+    // Cache the slide + idx so visibilitychange:visible can reopen the
+    // same impression after the tab returns from background.
+    lastSlideForRestart = { slide: slide, idx: (typeof idx === 'number') ? idx : null };
+    // Warm the auth cache for the rep so the first slide change already
+    // has it ready (both for the supabase-js insert and the keepalive
+    // fetch path on pagehide).
+    ensureTelemetryAuth();
   }
 
   function computeImpressionDurationMs(imp) {
-    var pauseMs = imp.pausedMs || 0;
-    if (imp.pausedAt) pauseMs += Date.now() - imp.pausedAt;
-    return Math.max(0, Date.now() - imp.startedAt - pauseMs);
+    return Math.max(0, Date.now() - imp.startedAt);
   }
 
   function flushCurrentImpression() {
@@ -144,36 +190,59 @@
       return;
     }
 
-    // Rep path
+    // Rep path. Posts directly to PostgREST with fetch + keepalive:true
+    // so the request survives a page tear-down (pagehide / beforeunload
+    // / tab kill). supabase-js's insert doesn't expose keepalive, and
+    // its in-flight fetches get cancelled by the browser when the page
+    // unloads, which was dropping the final-slide row for most
+    // sessions. The cached telemetryAccessToken keeps this synchronous
+    // at flush time.
     var draftId = c.state.activeDraftId;
-    if (!draftId || !c.supa) return;
+    if (!draftId) return;
+    var cfg = window.__SUPABASE_CONFIG;
+    if (!cfg || !cfg.url || !cfg.key) return;
+    if (!telemetryAccessToken || !telemetryUserId) {
+      // Auth cache not warm yet. Try to fill it for next time and skip
+      // this impression rather than POST anonymously (the RLS policy
+      // would reject it).
+      ensureTelemetryAuth();
+      console.warn('[fw telemetry] rep flush skipped: auth not ready');
+      return;
+    }
+
     var customer = c.state.customer || {};
-    var doInsert = function (userId) {
-      try {
-        c.supa.from('footwear_slide_telemetry').insert({
-          draft_id:              draftId,
-          slide_id:              imp.slideId,
-          slide_key:             imp.slideKey,
-          slide_title:           imp.slideTitle,
-          season_id:             c.state.seasonId || null,
-          customer_account_code: customer.account_code || null,
-          customer_account_name: customer.account_name || null,
-          customer_state:        customer.state        || null,
-          viewer_role:           'rep',
-          viewer_user_id:        userId,
-          account_manager:       customer.account_manager || null,
-          duration_ms:           durationMs,
-          display_order:         imp.displayOrder
-        }).then(function () { /* fire-and-forget */ })
-          .catch(function () { /* swallow telemetry errors */ });
-      } catch (e) { /* ignore */ }
+    var body = {
+      draft_id:              draftId,
+      slide_id:              imp.slideId,
+      slide_key:             imp.slideKey,
+      slide_title:           imp.slideTitle,
+      season_id:             c.state.seasonId || null,
+      customer_account_code: customer.account_code || null,
+      customer_account_name: customer.account_name || null,
+      customer_state:        customer.state        || null,
+      viewer_role:           'rep',
+      viewer_user_id:        telemetryUserId,
+      account_manager:       customer.account_manager || null,
+      duration_ms:           durationMs,
+      display_order:         imp.displayOrder
     };
-    if (telemetryUserId) {
-      doInsert(telemetryUserId);
-    } else {
-      ensureTelemetryUserId().then(function (uid) {
-        if (uid) doInsert(uid);
+
+    try {
+      fetch(cfg.url + '/rest/v1/footwear_slide_telemetry', {
+        method:    'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        cfg.key,
+          'Authorization': 'Bearer ' + telemetryAccessToken,
+          'Prefer':        'return=minimal'
+        },
+        body: JSON.stringify(body)
+      }).catch(function (e) {
+        console.warn('[fw telemetry] rep insert failed:', e);
       });
+    } catch (e) {
+      console.warn('[fw telemetry] rep insert threw:', e);
     }
   }
   // Touch swipe state
