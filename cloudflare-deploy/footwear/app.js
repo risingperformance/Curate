@@ -483,8 +483,19 @@
     // First save -> insert. Don't pass created_by; the BEFORE trigger
     // (footwear_drafts_audit) sets it to auth.uid(). Tag the draft with
     // the current season so the season-picker landing can bucket it.
+    //
+    // Seed customer_data from state.customer on the way in. Prior to
+    // May 2026 this came only from updates, which meant new drafts
+    // INSERTed while saving cart_items first (the most common path)
+    // landed with customer_data = null and showed "Unnamed" on the
+    // home page. The caller can still override by passing customer_data
+    // explicitly in updates.
     var insertPayload = Object.assign(
-      { status: 'draft', season_id: seasonId },
+      {
+        status:        'draft',
+        season_id:     seasonId,
+        customer_data: state.customer || null
+      },
       updates
     );
     var insRes = await supa
