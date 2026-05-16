@@ -44,6 +44,138 @@
   }
   // Lifecycle: cleanup function returned by the currently mounted template
   var currentCleanup = null;
+
+  // ── Slide telemetry (May 2026) ──────────────────────────────────────────
+  // Records one row per slide impression into
+  // footwear_slide_telemetry. Two viewer roles:
+  //   rep      -- direct INSERT under the RLS policy that scopes
+  //               writes to drafts the rep owns.
+  //   customer -- the SECURITY DEFINER RPC record_footwear_slide_view,
+  //               keyed on the share token.
+  //
+  // The timer pauses while the tab is hidden (Page Visibility API) so
+  // a customer who alt-tabs to take a call doesn't accumulate four
+  // hours on whatever slide was last visible. The server-side trigger
+  // also clamps durations at 10 minutes for belt-and-braces.
+  //
+  // pagehide is wired to flush the last open impression when the page
+  // unloads, so closing the browser at the end of a session captures
+  // the final slide instead of dropping it.
+  var telemetryUserId   = null;      // cached auth.uid for the rep; resolved lazily
+  var currentImpression = null;      // { slideId, slideKey, slideTitle, displayOrder, startedAt, pausedMs, pausedAt }
+  var telemetryWired    = false;
+
+  function ensureTelemetryUserId() {
+    if (telemetryUserId) return Promise.resolve(telemetryUserId);
+    var c = window.fwApp;
+    if (!c || !c.supa || c.state.reviewMode) return Promise.resolve(null);
+    return c.supa.auth.getUser().then(function (r) {
+      telemetryUserId = (r && r.data && r.data.user && r.data.user.id) || null;
+      return telemetryUserId;
+    }).catch(function () { return null; });
+  }
+
+  function wireTelemetryListeners() {
+    if (telemetryWired) return;
+    telemetryWired = true;
+    // pagehide is more reliable than beforeunload on mobile Safari.
+    // Both wire so we catch every navigation-away path.
+    window.addEventListener('pagehide',    flushCurrentImpression);
+    window.addEventListener('beforeunload', flushCurrentImpression);
+    document.addEventListener('visibilitychange', function () {
+      if (!currentImpression) return;
+      if (document.hidden) {
+        // Pause: remember when the tab went away.
+        currentImpression.pausedAt = Date.now();
+      } else if (currentImpression.pausedAt) {
+        // Resume: add the elapsed pause time to the running total.
+        currentImpression.pausedMs += Date.now() - currentImpression.pausedAt;
+        currentImpression.pausedAt = null;
+      }
+    });
+  }
+
+  function startImpression(slide, idx) {
+    flushCurrentImpression();
+    wireTelemetryListeners();
+    if (!slide) return;
+    currentImpression = {
+      slideId:      slide.id,
+      slideKey:     slide.slide_key || null,
+      slideTitle:   slide.title     || null,
+      displayOrder: (typeof idx === 'number') ? idx : null,
+      startedAt:    Date.now(),
+      pausedMs:     0,
+      pausedAt:     null
+    };
+    // Warm the user id cache for the rep so the first slide change
+    // already has it ready by the time the impression closes.
+    ensureTelemetryUserId();
+  }
+
+  function computeImpressionDurationMs(imp) {
+    var pauseMs = imp.pausedMs || 0;
+    if (imp.pausedAt) pauseMs += Date.now() - imp.pausedAt;
+    return Math.max(0, Date.now() - imp.startedAt - pauseMs);
+  }
+
+  function flushCurrentImpression() {
+    var c = window.fwApp;
+    if (!currentImpression || !c) return;
+    var imp = currentImpression;
+    currentImpression = null;  // null out first so a double-flush is a no-op
+    var durationMs = computeImpressionDurationMs(imp);
+    // Drop impressions under 100 ms. The deck briefly renders a slide
+    // while navigating somewhere else; that flicker is not data.
+    if (durationMs < 100) return;
+
+    if (c.state.reviewMode) {
+      var token = c.state.activeShareToken;
+      if (!token || !c.supa || !c.supa.rpc) return;
+      try {
+        c.supa.rpc('record_footwear_slide_view', {
+          p_share_token:   token,
+          p_slide_id:      imp.slideId,
+          p_duration_ms:   durationMs,
+          p_display_order: imp.displayOrder
+        }).then(function () { /* fire-and-forget */ })
+          .catch(function () { /* swallow telemetry errors */ });
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    // Rep path
+    var draftId = c.state.activeDraftId;
+    if (!draftId || !c.supa) return;
+    var customer = c.state.customer || {};
+    var doInsert = function (userId) {
+      try {
+        c.supa.from('footwear_slide_telemetry').insert({
+          draft_id:              draftId,
+          slide_id:              imp.slideId,
+          slide_key:             imp.slideKey,
+          slide_title:           imp.slideTitle,
+          season_id:             c.state.seasonId || null,
+          customer_account_code: customer.account_code || null,
+          customer_account_name: customer.account_name || null,
+          customer_state:        customer.state        || null,
+          viewer_role:           'rep',
+          viewer_user_id:        userId,
+          account_manager:       customer.account_manager || null,
+          duration_ms:           durationMs,
+          display_order:         imp.displayOrder
+        }).then(function () { /* fire-and-forget */ })
+          .catch(function () { /* swallow telemetry errors */ });
+      } catch (e) { /* ignore */ }
+    };
+    if (telemetryUserId) {
+      doInsert(telemetryUserId);
+    } else {
+      ensureTelemetryUserId().then(function (uid) {
+        if (uid) doInsert(uid);
+      });
+    }
+  }
   // Touch swipe state
   var touchStartX = null;
   var touchStartY = null;
@@ -301,6 +433,11 @@
       slideEl.offsetWidth;
       slideEl.classList.add(direction === 'next' ? 'deck-slide-anim-next' : 'deck-slide-anim-prev');
     }
+
+    // Start telemetry for this impression. startImpression() flushes
+    // any open impression first, so navigating between slides
+    // automatically captures the time spent on the previous one.
+    startImpression(slide, idx);
   }
 
   // Paint the position-dots pill at the bottom of the slide. Each dot
@@ -363,6 +500,10 @@
     //   - review mode: go to the customer summary screen
     //   - rep mode:    flow into the full footwear catalogue
     if (c.state.currentSlideIndex >= order.length - 1) {
+      // Flush the final impression before leaving the deck view so
+      // setView() doesn't tear down the visible slide before its time
+      // has been recorded.
+      flushCurrentImpression();
       if (c.state.reviewMode) c.setView('summary');
       else                    c.setView('catalogue');
       return;

@@ -1537,7 +1537,7 @@ function renderLoginsActivity(rows) {
       <table class="data-grid">
         <thead>
           <tr>
-            <th style="width:170px">Time</th>
+            <th style="width:170px">Time <span style="font-weight:400;font-size:11px;opacity:0.7;letter-spacing:0.5px">(${escapeHtml(localTimezoneShort()) || 'local'})</span></th>
             <th>Full name</th>
             <th>Email</th>
             <th>Role</th>
@@ -1564,6 +1564,21 @@ function formatDateTime(ts) {
   const d = new Date(ts);
   const pad = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Short label for the viewer's local timezone (e.g. "AEST", "NZDT",
+// "PDT"). Used to signpost on the login history column that the
+// timestamps are rendered in browser-local time, not UTC. Falls back
+// to an empty string if the runtime doesn't support
+// Intl.DateTimeFormat.formatToParts (very old browsers).
+function localTimezoneShort() {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date());
+    const tz = parts.find(p => p.type === 'timeZoneName');
+    return tz ? tz.value : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 function relativeTime(ts) {
