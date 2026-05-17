@@ -407,6 +407,179 @@
   /* ── LOADING ── */
   .loading { text-align: center; padding: 60px 20px; color: var(--mid); font-size: 14px; }
 
+  /* ── SLIDE ANALYTICS ── */
+  /* The slide leaderboard tab. Only shown when the user is admin or
+     manager AND the active product type is footwear. JS adds/removes
+     the .tab-btn-hidden class to enforce both conditions. */
+  .tab-btn.tab-btn-hidden { display: none; }
+
+  .slide-filter-pills { display: flex; gap: 6px; }
+  .slide-filter-pill {
+    padding: 6px 12px;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    border-radius: 16px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mid);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .slide-filter-pill:hover { color: var(--navy); }
+  .slide-filter-pill.active {
+    background: var(--navy);
+    color: #fff;
+    border-color: var(--navy);
+  }
+
+  .slide-table-card {
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    overflow: visible;
+  }
+  table.slide-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.slide-table th {
+    background: var(--navy); color: #fff; padding: 11px 14px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    font-weight: 600; letter-spacing: 0.5px; text-align: left;
+    position: relative;
+    user-select: none;
+  }
+  table.slide-table th.num,
+  table.slide-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.slide-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  table.slide-table tr:last-child td { border-bottom: none; }
+  table.slide-table tbody tr:hover td { background: #f8f9fd; }
+
+  /* Header tooltip popover. The "i" badge is the hover handle. */
+  .slide-table th[data-tip] { cursor: help; }
+  .slide-table th[data-tip] .info-i {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    font-size: 10px; font-weight: 700;
+    margin-left: 5px; vertical-align: middle;
+    font-style: italic; font-family: Georgia, serif;
+  }
+  .slide-table th[data-tip]:hover .info-i { background: var(--gold); color: var(--navy); }
+  .slide-table th[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--navy);
+    color: #fff;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    white-space: normal;
+    width: 280px;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.45;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 200;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  .slide-table th[data-tip]::before {
+    content: '';
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--navy);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 201;
+  }
+  .slide-table th[data-tip]:hover::after,
+  .slide-table th[data-tip]:hover::before { opacity: 1; }
+  .slide-table th.right-tip::after  { left: auto; right: 0; transform: none; }
+  .slide-table th.right-tip::before { left: auto; right: 14px; transform: none; }
+
+  /* Slide cell: thumbnail + title, no sub-descriptor. */
+  .slide-cell { display: flex; gap: 12px; align-items: center; }
+  .slide-thumb {
+    width: 80px; height: 56px; border-radius: 5px;
+    flex: 0 0 80px;
+    background: linear-gradient(135deg, var(--blue) 0%, var(--navy) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .slide-thumb::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(255,255,255,0.15), transparent 50%);
+  }
+  .slide-name {
+    font-weight: 600;
+    font-family: 'Barlow', sans-serif;
+    font-size: 13.5px;
+    color: var(--navy);
+    line-height: 1.3;
+  }
+
+  /* YoY growth badge (the effectiveness signal, colour-coded). */
+  .yoy-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 12px;
+    font-weight: 700; font-size: 12.5px;
+    min-width: 78px; justify-content: center;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Barlow', sans-serif;
+  }
+  .yoy-badge.good { background: #e6f4ec; color: #1f6e3f; }
+  .yoy-badge.mid  { background: #fbf2d3; color: #8a6b13; }
+  .yoy-badge.bad  { background: #fae6e6; color: #aa3838; }
+  .yoy-badge.na   { background: var(--border); color: var(--mid); }
+
+  /* Engagement: small inline bar + percentage. */
+  .engage-cell {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-width: 120px; justify-content: flex-end;
+  }
+  .engage-bar {
+    flex: 1; max-width: 70px; height: 6px;
+    background: #eaeae6; border-radius: 3px; overflow: hidden;
+  }
+  .engage-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #4a8967 0%, #1f6e3f 100%);
+  }
+  .engage-fill.mid { background: linear-gradient(90deg, #d4b94a 0%, #b8941f 100%); }
+  .engage-fill.bad { background: linear-gradient(90deg, #d97373 0%, #aa3838 100%); }
+  .engage-num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700; font-size: 12.5px;
+    min-width: 38px; text-align: right;
+  }
+  .engage-cell.na .engage-bar { display: none; }
+  .engage-cell.na .engage-num { color: var(--mid); font-weight: 400; }
+
+  .slide-empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--mid); font-size: 14px;
+  }
+
   /* ── TARGET ADMIN ── */
   .target-admin-toggle {
     font-size: 12px; color: var(--mid); cursor: pointer; margin-left: 12px;
@@ -511,11 +684,15 @@
 </div>
 
 <!-- ── TAB BAR (level 2) ── -->
+<!-- The Slide Analytics tab is hidden by default. dashboard.js reveals
+     it only when (role is admin or manager) AND (productType is
+     footwear). Reps never see it; apparel mode never shows it. -->
 <div class="tab-bar">
   <button class="tab-btn active" data-tab="leaderboard">Leaderboard</button>
   <button class="tab-btn" data-tab="top-products">Top Products</button>
   <button class="tab-btn" data-tab="orders">All Orders</button>
   <button class="tab-btn" data-tab="drafts">Drafts</button>
+  <button class="tab-btn tab-btn-hidden" data-tab="slide-analytics" id="tab-btn-slide-analytics">Slide Analytics</button>
 </div>
 
 <!-- Footwear placeholder, swapped in for the panels when the Footwear
@@ -678,6 +855,44 @@
     </thead>
     <tbody id="drafts-body"></tbody>
   </table>
+</div>
+
+<!-- ── SLIDE ANALYTICS ── -->
+<!-- Admin / manager only; footwear only. dashboard.js gates visibility
+     on both, loads the RPC payload, and renders the table. -->
+<div class="tab-panel" id="panel-slide-analytics">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <div class="section-title" style="margin-bottom:0;border:none;flex:1">Slide Effectiveness</div>
+    <div class="slide-filter-pills" id="slide-filter-pills">
+      <button class="slide-filter-pill active" data-filter="all">All slides</button>
+      <button class="slide-filter-pill" data-filter="top">Top performers</button>
+      <button class="slide-filter-pill" data-filter="bad">Underperformers</button>
+    </div>
+  </div>
+  <div style="font-size:12px;color:var(--mid);margin-bottom:14px;line-height:1.4">
+    Sorted by YoY customer growth (descending). Top performers = customers grew over 10%; Underperformers = customers shrank over 5%. Hover any column header for its definition.
+  </div>
+
+  <div id="slide-analytics-loading" class="loading">Loading…</div>
+  <div class="slide-table-card" id="slide-analytics-card" style="display:none">
+    <table class="slide-table" id="slide-analytics-table">
+      <thead>
+        <tr>
+          <th style="width:30%">Slide</th>
+          <th class="num" data-tip="Number of times this slide was shown across all rep presentations in the selected period.">Impressions<span class="info-i">i</span></th>
+          <th class="num" data-tip="Average seconds spent on the slide per impression. Server-side clamped at 10 minutes to absorb tab-left-open noise.">Avg time<span class="info-i">i</span></th>
+          <th class="num" data-tip="Percentage of impressions under 2 seconds. High values suggest reps are clicking through without engaging.">Skip rate<span class="info-i">i</span></th>
+          <th class="num" data-tip="Number of products attached to this slide in the slide editor.">Products<span class="info-i">i</span></th>
+          <th class="num" data-tip="Pairs sold of this slide's featured products in orders where this slide was shown. The slide-attributed product sales figure.">Pairs from slide<span class="info-i">i</span></th>
+          <th class="num" data-tip="Total pairs across ALL products in orders where this slide was shown. Captures whether seeing this slide correlates with bigger overall orders.">Total order pairs<span class="info-i">i</span></th>
+          <th class="num" data-tip="Average year-over-year pair growth across customers who saw this slide. For each viewer, we compare their current-season order size to their prior-season order size, then average those rates. The headline effectiveness signal.">YoY growth<span class="info-i">i</span></th>
+          <th class="num right-tip" data-tip="Percentage of presentations that included this slide in the deck. Reps can remove slides from the default deck before presenting, so this measures how often reps choose to keep this slide in.">Attach rate<span class="info-i">i</span></th>
+          <th class="num right-tip" data-tip="Percentage of slide impressions where the rep spent more than 30 seconds on the slide. Measures meaningful attention rather than quick click-throughs.">Engagement<span class="info-i">i</span></th>
+        </tr>
+      </thead>
+      <tbody id="slide-analytics-body"></tbody>
+    </table>
+  </div>
 </div>
 
 <script src="dashboard.js"></script>

@@ -111,6 +111,164 @@ function applyRoleVisibility() {
   const isPrivileged = u.role === 'admin' || u.role === 'manager';
   const editBtn = document.getElementById('toggle-target-admin');
   if (editBtn) editBtn.hidden = !isPrivileged;
+  // Slide Analytics tab follows the same role gate plus a footwear
+  // product-type gate. updateSlideAnalyticsTabVisibility owns the
+  // combined check; we just trigger a re-evaluation here.
+  updateSlideAnalyticsTabVisibility();
+}
+
+// ── SLIDE ANALYTICS ─────────────────────────────────────────────────────────
+// Visibility: (role admin or manager) AND (productType is footwear).
+// Reps never see the tab; apparel mode never shows it. If the user is
+// already viewing the tab when conditions change (e.g. they switch to
+// apparel), bounce them back to the Leaderboard.
+function updateSlideAnalyticsTabVisibility() {
+  const u = currentUser || {};
+  const isPrivileged = u.role === 'admin' || u.role === 'manager';
+  const isFootwear   = productType === 'footwear';
+  const tabBtn = document.getElementById('tab-btn-slide-analytics');
+  if (!tabBtn) return;
+  const shouldShow = isPrivileged && isFootwear;
+  tabBtn.classList.toggle('tab-btn-hidden', !shouldShow);
+  if (!shouldShow && tabBtn.classList.contains('active')) {
+    showTab('leaderboard');
+  }
+}
+
+// In-memory cache. Cleared on season change and on manual refresh so
+// the tab feels instant when toggling between it and the Leaderboard.
+let slideAnalyticsCache  = null;   // { season, rows }
+let slideAnalyticsFilter = 'all';  // 'all' | 'top' | 'bad'
+
+async function loadSlideAnalytics(force) {
+  const loadingEl = document.getElementById('slide-analytics-loading');
+  const cardEl    = document.getElementById('slide-analytics-card');
+  if (!loadingEl || !cardEl) return;
+
+  if (!force && slideAnalyticsCache && slideAnalyticsCache.season === currentSeason) {
+    renderSlideAnalytics(slideAnalyticsCache.rows);
+    return;
+  }
+
+  loadingEl.style.display = '';
+  loadingEl.textContent = 'Loading…';
+  cardEl.style.display = 'none';
+
+  // currentSeason can be null if the seasons list hasn't loaded yet.
+  // The RPC requires a season id; fall back to the canonical AW27 shoe
+  // season so a fast tab-click before loadAll resolves doesn't error.
+  const season = currentSeason || 'AW27-shoe';
+
+  const { data, error } = await supa.rpc('get_footwear_slide_leaderboard', {
+    p_season_id:              season,
+    p_account_manager_filter: null,
+    p_customer_group_filter:  null
+  });
+
+  if (error) {
+    loadingEl.textContent = 'Could not load slide analytics: ' + (error.message || 'unknown error');
+    cardEl.style.display = 'none';
+    return;
+  }
+
+  slideAnalyticsCache = { season: season, rows: data || [] };
+  renderSlideAnalytics(slideAnalyticsCache.rows);
+}
+
+function renderSlideAnalytics(rows) {
+  const loadingEl = document.getElementById('slide-analytics-loading');
+  const cardEl    = document.getElementById('slide-analytics-card');
+  const bodyEl    = document.getElementById('slide-analytics-body');
+  if (!bodyEl) return;
+
+  const filtered = filterSlideRows(rows || [], slideAnalyticsFilter);
+
+  if ((rows || []).length === 0) {
+    loadingEl.style.display = '';
+    loadingEl.textContent = 'No slide telemetry yet for this season. As reps run presentations the data will appear here.';
+    cardEl.style.display = 'none';
+    return;
+  }
+  if (filtered.length === 0) {
+    loadingEl.style.display = '';
+    loadingEl.textContent = 'No slides match this filter.';
+    cardEl.style.display = 'none';
+    return;
+  }
+
+  loadingEl.style.display = 'none';
+  cardEl.style.display = '';
+
+  bodyEl.innerHTML = filtered.map(function (r) {
+    var products = (r.products_count != null && r.products_count > 0) ? r.products_count : null;
+    return ''
+      + '<tr>'
+      +   '<td>'
+      +     '<div class="slide-cell">'
+      +       '<div class="slide-thumb"></div>'
+      +       '<div class="slide-name">' + escapeHtml(r.slide_title || r.slide_key || 'Untitled slide') + '</div>'
+      +     '</div>'
+      +   '</td>'
+      +   '<td class="num">' + fmtSlideNum(r.impressions) + '</td>'
+      +   '<td class="num">' + fmtSlideTime(r.avg_duration_ms) + '</td>'
+      +   '<td class="num">' + fmtSlideRate(r.skip_rate_pct) + '</td>'
+      +   '<td class="num">' + (products === null ? 'N/A' : products) + '</td>'
+      +   '<td class="num">' + (products === null ? 'N/A' : fmtSlideNum(r.pairs_from_slide)) + '</td>'
+      +   '<td class="num">' + fmtSlideNum(r.total_order_pairs) + '</td>'
+      +   '<td class="num">' + yoyBadge(r.avg_yoy_growth_pct) + '</td>'
+      +   '<td class="num">' + fmtSlideRate(r.attach_rate_pct) + '</td>'
+      +   '<td class="num">' + engageCell(r.engagement_pct) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function filterSlideRows(rows, filter) {
+  if (filter === 'top') return rows.filter(function (r) { return yoyBand(r.avg_yoy_growth_pct) === 'good'; });
+  if (filter === 'bad') return rows.filter(function (r) { return yoyBand(r.avg_yoy_growth_pct) === 'bad'; });
+  return rows;
+}
+function yoyBand(g) {
+  if (g === null || g === undefined) return 'na';
+  var v = Number(g);
+  if (isNaN(v)) return 'na';
+  if (v >= 10) return 'good';
+  if (v >= -5) return 'mid';
+  return 'bad';
+}
+function yoyBadge(g) {
+  if (g === null || g === undefined) {
+    return '<span class="yoy-badge na">N/A</span>';
+  }
+  var v = Number(g);
+  if (isNaN(v)) return '<span class="yoy-badge na">N/A</span>';
+  var cls   = yoyBand(v);
+  var arrow = v > 0.5 ? '▲' : v < -0.5 ? '▼' : '-';
+  var sign  = v > 0 ? '+' : '';
+  return '<span class="yoy-badge ' + cls + '">' + arrow + ' ' + sign + v.toFixed(1) + '%</span>';
+}
+function engageCell(eng) {
+  if (eng === null || eng === undefined) {
+    return '<div class="engage-cell na"><span class="engage-num">N/A</span></div>';
+  }
+  var e = Number(eng);
+  if (isNaN(e)) return '<div class="engage-cell na"><span class="engage-num">N/A</span></div>';
+  var cls = e >= 60 ? '' : e >= 30 ? 'mid' : 'bad';
+  return '<div class="engage-cell">'
+    + '<div class="engage-bar"><div class="engage-fill ' + cls + '" style="width: ' + Math.max(0, Math.min(100, e)) + '%;"></div></div>'
+    + '<span class="engage-num">' + e.toFixed(0) + '%</span>'
+    + '</div>';
+}
+function fmtSlideNum(n) {
+  if (n === null || n === undefined) return 'N/A';
+  return Number(n).toLocaleString();
+}
+function fmtSlideTime(ms) {
+  if (ms === null || ms === undefined) return 'N/A';
+  return Math.round(Number(ms) / 1000) + 's';
+}
+function fmtSlideRate(r) {
+  if (r === null || r === undefined) return 'N/A';
+  return Number(r).toFixed(1) + '%';
 }
 
 // Shared redirect helper: send the user to the root login with a ?next= back
@@ -1550,7 +1708,12 @@ async function saveTargets() {
 
 // Header buttons (legacy; the visible UI is the hamburger menu, but the
 // hidden buttons keep their listeners in case other code triggers them).
-document.getElementById('btn-refresh-load').addEventListener('click', loadAll);
+document.getElementById('btn-refresh-load').addEventListener('click', function () {
+  // Manual refresh invalidates the slide analytics cache too so a
+  // subsequent click on the tab re-pulls from the RPC.
+  slideAnalyticsCache = null;
+  loadAll();
+});
 document.getElementById('btn-sign-out').addEventListener('click', handleSignOut);
 
 // ── Hamburger menu ─────────────────────────────────────────────────────────
@@ -1591,7 +1754,7 @@ document.querySelectorAll('[data-dash-menu]').forEach(function (item) {
     var act = item.getAttribute('data-dash-menu');
     closeHeaderMenu();
     if      (act === 'home')    window.location.assign('index.html');
-    else if (act === 'refresh') loadAll();
+    else if (act === 'refresh') { slideAnalyticsCache = null; loadAll(); }
     else if (act === 'signout') handleSignOut();
   });
 });
@@ -1610,6 +1773,27 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', function() {
     const tabId = this.dataset.tab;
     showTab(tabId);
+    // Slide analytics loads on demand the first time the tab is shown,
+    // and uses an in-memory cache for subsequent clicks. The other
+    // tabs load via loadAll(); this one is on its own loader so we
+    // don't pay for it on every page load.
+    if (tabId === 'slide-analytics') {
+      loadSlideAnalytics(false);
+    }
+  });
+});
+
+// Slide analytics filter pills (All / Top / Underperformers).
+document.querySelectorAll('#slide-filter-pills .slide-filter-pill').forEach(function (pill) {
+  pill.addEventListener('click', function () {
+    document.querySelectorAll('#slide-filter-pills .slide-filter-pill').forEach(function (p) {
+      p.classList.remove('active');
+    });
+    pill.classList.add('active');
+    slideAnalyticsFilter = pill.getAttribute('data-filter') || 'all';
+    if (slideAnalyticsCache) {
+      renderSlideAnalytics(slideAnalyticsCache.rows);
+    }
   });
 });
 
@@ -1624,6 +1808,10 @@ document.querySelectorAll('.product-pill').forEach(btn => {
     if (type === productType) return;
     productType = type;
     try { localStorage.setItem(LS_PRODUCT_KEY, type); } catch (e) { /* ignore */ }
+    // Re-evaluate slide analytics tab visibility; productType is one
+    // of its gates. If the user is on the slide tab and switches to
+    // apparel, the helper bounces them back to Leaderboard.
+    updateSlideAnalyticsTabVisibility();
     loadAll();
   });
 });
@@ -1638,6 +1826,9 @@ if (_seasonSelEl) {
     if (!val) return;
     currentSeason = val;
     try { localStorage.setItem(LS_SEASON_KEY(productType), val); } catch (e) { /* ignore */ }
+    // Invalidate the slide analytics cache so the next visit refetches
+    // for the newly-selected season.
+    slideAnalyticsCache = null;
     loadAll();
   });
 }
